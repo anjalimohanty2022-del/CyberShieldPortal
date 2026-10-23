@@ -1,4 +1,5 @@
 import os
+import json
 import re
 import random
 import sqlite3
@@ -11,6 +12,8 @@ import webbrowser
 from email.message import EmailMessage
 from uuid import uuid4
 from urllib.parse import urlparse
+from urllib.request import Request as URLRequest, urlopen
+from urllib.error import HTTPError, URLError
 from datetime import datetime, timedelta
 from flask import Flask, render_template_string, request, redirect, url_for, session, jsonify, send_from_directory, abort
 from werkzeug.utils import secure_filename
@@ -424,10 +427,11 @@ SITE_LANGUAGE_SCRIPT = r"""
   document.documentElement.lang=lang==='or'?'or':'en';
   const walker=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
   const nodes=[]; while(walker.nextNode()) nodes.push(walker.currentNode);
+  const originalTextByNode=new WeakMap();
   for(const n of nodes){
-   if(n.parentElement.closest(skip)) continue;
-   if(!n.dataset.enText) n.dataset.enText=n.nodeValue;
-   const original=n.dataset.enText; const key=original.trim().replace(/\s+/g,' ');
+   if(n.parentElement && n.parentElement.closest(skip)) continue;
+   if(!originalTextByNode.has(n)) originalTextByNode.set(n,n.nodeValue);
+   const original=originalTextByNode.get(n); const key=original.trim().replace(/\s+/g,' ');
    let translated=od[key];
    if(lang==='or' && !translated){for(const en in dynamicPrefixes)if(key.startsWith(en)){translated=dynamicPrefixes[en]+key.slice(en.length);break;}}
    if(lang==='or' && translated) { const lead=original.match(/^\s*/)[0], tail=original.match(/\s*$/)[0]; n.nodeValue=lead+translated+tail; }
@@ -1018,7 +1022,105 @@ HOME_PAGE = '''
     </section>
 
     <!-- Public district totals only; no citizen details -->
-    <section class="mx-auto my-8 w-full max-w-7xl px-4 md:px-6" aria-labelledby="district-report-title"><div class="rounded-3xl border border-cyan-500/30 bg-slate-900/80 p-5 shadow-xl md:p-8"><div class="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[.2em] text-cyan-300">Odisha overview</p><h3 id="district-report-title" class="mt-1 text-2xl font-black text-white">District-wise cyber reports</h3><p class="mt-1 text-sm text-slate-300">Aggregated reports registered in this demo portal.</p></div><span class="rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200">Counts only · no personal details</span></div><div class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">{% for item in district_counts %}<div class="flex items-center justify-between gap-2 rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2.5"><span class="text-xs font-semibold text-slate-200">{{ item.district }}</span><span class="min-w-8 rounded-lg bg-cyan-500/15 px-2 py-1 text-center text-xs font-black text-cyan-200">{{ item.count }}</span></div>{% endfor %}</div><p class="mt-4 text-[11px] text-slate-400">These are local demo submissions, not official police or government statistics. For real cybercrime reporting, use cybercrime.gov.in or call 1930 for financial fraud.</p></div></section>
+    <section class="mx-auto my-8 w-full max-w-7xl px-4 md:px-6" aria-labelledby="district-report-title"><div class="rounded-3xl border border-cyan-500/30 bg-slate-900/80 p-5 shadow-xl md:p-8"><div class="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p class="text-xs font-black uppercase tracking-[.2em] text-cyan-300">Odisha overview</p><h3 id="district-report-title" class="mt-1 text-2xl font-black text-white">District-wise cyber reports</h3><p class="mt-1 text-sm text-slate-300">Aggregated reports registered in this demo portal.</p></div><span class="rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2 text-xs font-bold text-amber-200">Counts only · no personal details</span></div><div id="district-report-grid" class="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">{% for item in district_counts %}<div class="district-report-card flex items-center justify-between gap-2 rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2.5" data-district="{{ item.district }}" data-count="{{ item.count }}"><span class="text-xs font-semibold text-slate-200">{{ item.district }}</span><span class="min-w-8 rounded-lg bg-cyan-500/15 px-2 py-1 text-center text-xs font-black text-cyan-200">{{ item.count }}</span></div>{% endfor %}</div><p class="mt-4 text-[11px] text-slate-400">These are local demo submissions, not official police or government statistics. For real cybercrime reporting, use cybercrime.gov.in or call 1930 for financial fraud.</p></div></section>
+
+    <!-- CyberShield assistant: local help plus optional server-side Gemini AI -->
+    <section id="cybershield-chat" class="mx-auto my-8 w-full max-w-7xl px-4 md:px-6" aria-labelledby="chat-title">
+        <div class="overflow-hidden rounded-3xl border border-violet-400/40 bg-slate-900 shadow-2xl">
+            <div class="border-b border-slate-700 bg-gradient-to-r from-violet-950 to-cyan-950 p-5 md:p-7">
+                <p class="text-xs font-black uppercase tracking-[.2em] text-cyan-200">CyberShield Assistant</p>
+                <h3 id="chat-title" class="mt-1 text-2xl font-black text-white">Ask me anything</h3>
+                <p class="mt-2 text-sm text-slate-300">Ask in English, Odia, or Romanized Odia. General questions use AI when a server-side Gemini API key is configured.</p>
+            </div>
+            <div id="chat-messages" class="max-h-80 min-h-40 space-y-3 overflow-y-auto p-4 md:p-6" aria-live="polite" aria-label="Chat messages">
+                <div class="max-w-3xl rounded-2xl rounded-tl-sm border border-cyan-700/50 bg-slate-950 p-4 text-sm text-slate-100">Namaskar! I can help explain this demo portal and basic cyber-safety steps. Ask a question below. / ନମସ୍କାର! ଏହି ଡେମୋ ପୋର୍ଟାଲ୍ ଓ ସାଇବର ସୁରକ୍ଷା ବିଷୟରେ ପଚାରନ୍ତୁ।</div>
+            </div>
+            <form id="chat-form" class="flex flex-col gap-2 border-t border-slate-700 p-4 sm:flex-row md:p-6">
+                <label class="sr-only" for="chat-question">Your question</label>
+                <input id="chat-question" name="question" maxlength="500" required autocomplete="off" placeholder="Type in English, Odia, or Romanized Odia…" class="min-w-0 flex-1 rounded-xl border border-slate-600 bg-slate-950 px-4 py-3 text-sm text-white outline-none focus:border-cyan-400">
+                <button type="submit" class="rounded-xl bg-cyan-600 px-6 py-3 text-sm font-black text-white hover:bg-cyan-500">Ask / ପଚାରନ୍ତୁ</button>
+            </form>
+            <p class="px-4 pb-5 text-[11px] leading-relaxed text-amber-200 md:px-6">AI answers can be wrong or out of date. When AI is enabled, your question is sent to Google Gemini through this server; do not enter passwords, OTPs, UPI PINs, or private complaint details. For financial cyber fraud, call 1930 promptly; this demo does not file an official report.</p>
+        </div>
+    </section>
+    <script>
+    (function () {
+        const form = document.getElementById('chat-form');
+        const input = document.getElementById('chat-question');
+        const messages = document.getElementById('chat-messages');
+        if (!form || !input || !messages) return;
+        const districtAliases = {
+            'Angul':['angul','anugul','ଅନୁଗୁଳ'], 'Balangir':['balangir','bolangir','ବଲାଙ୍ଗୀର'],
+            'Balasore':['balasore','baleswar','ବାଲେଶ୍ୱର'], 'Bargarh':['bargarh','ବରଗଡ଼'],
+            'Bhadrak':['bhadrak','ଭଦ୍ରକ'], 'Boudh':['boudh','ବୌଦ୍ଧ'], 'Cuttack':['cuttack','କଟକ'],
+            'Deogarh':['deogarh','ଦେବଗଡ଼'], 'Dhenkanal':['dhenkanal','ଢେଙ୍କାନାଳ'],
+            'Gajapati':['gajapati','ଗଜପତି'], 'Ganjam':['ganjam','ଗଞ୍ଜାମ'],
+            'Jagatsinghpur':['jagatsinghpur','ଜଗତସିଂହପୁର'], 'Jajpur':['jajpur','ଯାଜପୁର'],
+            'Jharsuguda':['jharsuguda','ଝାରସୁଗୁଡ଼ା'], 'Kalahandi':['kalahandi','କଳାହାଣ୍ଡି'],
+            'Kandhamal':['kandhamal','କନ୍ଧମାଳ'], 'Kendrapara':['kendrapara','କେନ୍ଦ୍ରାପଡ଼ା'],
+            'Kendujhar':['kendujhar','keonjhar','କେନ୍ଦୁଝର'], 'Khordha':['khordha','khurda','ଖୋର୍ଦ୍ଧା'],
+            'Koraput':['koraput','କୋରାପୁଟ'], 'Malkangiri':['malkangiri','ମାଲକାନଗିରି'],
+            'Mayurbhanj':['mayurbhanj','ମୟୂରଭଞ୍ଜ'], 'Nabarangpur':['nabarangpur','ନବରଙ୍ଗପୁର'],
+            'Nayagarh':['nayagarh','ନୟାଗଡ଼'], 'Nuapada':['nuapada','ନୂଆପଡ଼ା'],
+            'Puri':['puri','ପୁରୀ'], 'Rayagada':['rayagada','ରାୟଗଡ଼ା'],
+            'Sambalpur':['sambalpur','ସମ୍ବଲପୁର'], 'Subarnapur':['subarnapur','sonepur','ସୁବର୍ଣ୍ଣପୁର'],
+            'Sundargarh':['sundargarh','ସୁନ୍ଦରଗଡ଼']
+        };
+        function replyFor(question) {
+            const q = question.toLowerCase();
+            const romanOdia = / (bhai|mote|mo|mu|kana|kahinki|kemiti|karibi|pariba|heichi|heba|hele|nahi|nahin|thik|deba|dekhauchi|kete|kahiba|achhi|achi|kn|ki|au|jaha|sabu|kouthi) /.test(' ' + q.replace(/[^a-z0-9]+/g, ' ') + ' ');
+            const odia = romanOdia || Array.from(question).some(ch => { const cp = ch.codePointAt(0); return cp >= 0x0b00 && cp <= 0x0b7f; });
+            const say = (en, or) => odia ? or : en;
+            const asksDistrictCount = /count|complaint number|complaints|reports|district wise|district count|zilla wise|jilla|kete|number kete|ଅଭିଯୋଗ|ସଂଖ୍ୟା/.test(q);
+            const district = asksDistrictCount ? Object.entries(districtAliases).find(([, aliases]) => aliases.some(a => q.includes(a.toLowerCase()))) : null;
+            if (district) {
+                const card = [...document.querySelectorAll('.district-report-card')].find(el => el.dataset.district === district[0]);
+                if (!card) return say(`${district[0]} has no complaint entry in the current public district summary.`, `ବର୍ତ୍ତମାନର public district summaryରେ ${district[0]} ପାଇଁ ଅଭିଯୋଗ ଦେଖାଯାଇନାହିଁ।`);
+                const count = card.dataset.count || '0';
+                return say(`${district[0]} shows ${count} demo complaint(s) in the public summary. This is this portal's own demo data, not an official statistic.`, `${district[0]} ପାଇଁ public summaryରେ ${count}ଟି demo ଅଭିଯୋଗ ଦେଖାଯାଉଛି। ଏହା ଏହି portalର demo ତଥ୍ୟ; ସରକାରୀ ଆକଳନ ନୁହେଁ।`);
+            }
+            if (/bot|chatbot|anything|everything|sabu pachar|jaha bi|jaha pachar|puchibi|puchile|pacharibi|pacharile|sabu prashna|all question|any question|answer debe/.test(q)) return say('I am a local demo assistant, not a full generative AI. I can answer common questions about this portal, cyber scams, account safety, URL/UPI/QR, GPS, and public district demo counts. I do not send your chat to an AI service.', 'Mu local demo assistant, full generative AI nuhen. Ehi portal, cyber scam, account safety, URL/UPI/QR, GPS ebam public district demo count bisayare sadharana prashnara uttara deiparibi. Chat AI service ku patha jae nahi.');
+            if (/phish|fake email|fake sms|suspicious message|social engineering|ଫିସିଂ/.test(q)) return say('Phishing is a fake message or website that tries to steal passwords, OTPs, or payment details. Do not click its links; open the official app/site yourself and report the message to the platform.', 'Phishing hela nakali message ba website dwara password, OTP ba payment details chori karibaku chesta. Link click karantu nahi; official app/site nije kholantu ebam platform ku message report karantu.');
+            if (/hack|hacked|account chori|account neigala|account access|ଖାତା ହ୍ୟାକ/.test(q)) return say('If an account may be hacked, use the service’s official recovery page, change its password from a trusted device, enable two-step verification, sign out other sessions, and contact the provider. Never share a recovery code.', 'Account hack heithile official recovery page byabahara kari trusted device ru password badalantu, two-step verification on karantu, anya session sign out karantu ebam provider ku contact karantu. Recovery code kahaku diantu nahi.');
+            if (/gps|location|address|bhadrak|bbsr|bhu?baneswar|ସ୍ଥାନ|ଠିକଣା/.test(q)) return say('Browser GPS is an estimate. Check the accuracy in metres, compare the map pin with your real place, and drag the pin or edit the address if needed. This portal cannot guarantee an exact street address.', 'Browser GPS eka estimate. Accuracy metre re dekhantu, map pin nijara sathik jagah saha milantu; darkar hele pin drag ba address edit karantu. Portal exact street address guarantee karipariba nahi.');
+            if (/official|government|police|cybercrime.gov|sarkari|ସରକାରୀ|ପୋଲିସ/.test(q)) return say('CyberShield is a demo portal, not an official government or police service. For official cybercrime reporting, use cybercrime.gov.in; for financial fraud call 1930 immediately.', 'CyberShield eka demo portal, sarkari ba police service nuhen. Official cybercrime report pain cybercrime.gov.in byabahara karantu; financial fraud hele turanta 1930 ku call karantu.');
+            if (/district wise|district count|zilla wise|jilla|ଜିଲ୍ଲା/.test(q)) return say('The district section shows only districts with demo complaints. Ask with a district name, for example “Bhadrak count”, to see its current number. These are not official statistics.', 'District section re kebala demo complaint thiba district dekhajae. District name saha pacharantu, jemiti “Bhadrak kete”; eha official statistic nuhen.');
+            if (/what is cyber|cyber crime|cyber safety|cyber surakhya|cyber surakhita/.test(q)) return say('Cyber safety means protecting your accounts, devices, identity, and money online. Use unique passwords and two-step verification; verify links and recipients; never share OTPs or UPI PINs.', 'Cyber safety mane online re account, device, identity ebam paisa surakhita rakhiba. Alaga password o two-step verification byabahara karantu; link/payee janchantu; OTP ba UPI PIN kahaku diantu nahi.');
+            if (/login|log in|register|registration|password reset|ପଞ୍ଜୀକରଣ|ଲଗଇନ/.test(q)) return say('For this demo, register or sign in from the home page. Complete your citizen profile before opening the complaint form. Use a password you do not use on another service.', 'Ehi demo pain home page ru register ba sign in karantu. Complaint form purbaru citizen profile pura karantu. Anya service re byabahara karuthiba password ethare diantu nahi.');
+            if (/1930|money|money lost|payment fraud|financial fraud|ଟଙ୍କା|ଠକେଇ|ଠକି|fraud/.test(q)) return say('If money was taken, call 1930 immediately and contact your bank/payment app through its official channel. Preserve transaction details. This demo does not submit an official report.', 'ଟଙ୍କା ଠକେଇ ହୋଇଥିଲେ ତୁରନ୍ତ ୧୯୩୦କୁ କଲ୍ କରନ୍ତୁ ଏବଂ bank/payment appକୁ official channelରେ ଜଣାନ୍ତୁ। Transaction details ସୁରକ୍ଷିତ ରଖନ୍ତୁ। ଏହି demo official report ଦାଖଲ କରେନି।');
+            if (/upi|pin|ପିନ୍|qr|କ୍ୟୁଆର/.test(q)) return say('A UPI/QR format check cannot verify the payee or prove a QR is safe. Verify the recipient name inside your payment app. Never share your UPI PIN or OTP.', 'UPI/QR format check ଦ୍ୱାରା payeeର ପରିଚୟ କିମ୍ବା QR ସୁରକ୍ଷିତ ବୋଲି ପ୍ରମାଣ ହୁଏନି। Payment appରେ recipient name ଯାଞ୍ଚ କରନ୍ତୁ। UPI PIN କିମ୍ବା OTP କାହାକୁ କହନ୍ତୁନି।');
+            if (/url|link|website|ଲିଙ୍କ|ୱେବସାଇଟ|scan|scanner/.test(q)) return say('The URL checker looks for local warning clues only; it does not query a live threat database. A low score does not prove a site is safe. Do not open unexpected links or enter passwords/OTPs.', 'URL checker କେବଳ ସ୍ଥାନୀୟ warning clue ଯାଞ୍ଚ କରେ; live threat database ନୁହେଁ। କମ୍ score ମାନେ site ସୁରକ୍ଷିତ ବୋଲି ପ୍ରମାଣ ନୁହେଁ। ଅଜଣା link ଖୋଲନ୍ତୁନି କିମ୍ବା password/OTP ଦିଅନ୍ତୁନି।');
+            if (/complaint|complain|report|ଅଭିଯୋଗ|ଦାଖଲ/.test(q)) return say('To use the demo complaint form, register or sign in, complete your citizen profile, then fill and submit the complaint form. It is not an official police/cybercrime filing channel.', 'Demo complaint form ପାଇଁ register କିମ୍ବା sign in କରନ୍ତୁ, citizen profile ପୂରଣ କରି complaint form submit କରନ୍ତୁ। ଏହା ସରକାରୀ police/cybercrime filing channel ନୁହେଁ।');
+            if (/status|case id|ସ୍ଥିତି/.test(q)) return say('Use the complaint-status option on the home page and enter your complaint/case ID. Do not share the ID or personal details in this public chat.', 'Home pageର complaint-status option ବ୍ୟବହାର କରି complaint/case ID ଦିଅନ୍ତୁ। ଏହି public chatରେ ID କିମ୍ବା ବ୍ୟକ୍ତିଗତ ତଥ୍ୟ ଲେଖନ୍ତୁନି।');
+            if (/password|otp|ପାସୱାର୍ଡ/.test(q)) return say('Never share passwords or OTPs in chat. If you entered them on a suspicious page, change your password using the official app/site and contact the service provider.', 'Chatରେ password କିମ୍ବା OTP କେବେ ଦିଅନ୍ତୁନି। ସନ୍ଦେହଜନକ pageରେ ଦେଇଥିଲେ official app/siteରୁ password ବଦଳାନ୍ତୁ ଏବଂ service providerକୁ ଜଣାନ୍ତୁ।');
+            if (/hello|hi|help|କେମିତି|କଣ|କ’ଣ|ନମସ୍କାର/.test(q)) return say('I can help with this portal, district demo counts, complaint steps, URL/UPI/QR safety, and emergency guidance. What would you like to know?', 'ଏହି portal, district demo count, complaint ପଦକ୍ଷେପ, URL/UPI/QR safety ଓ emergency ସହାୟତା ବିଷୟରେ ପଚାରନ୍ତୁ। କଣ ଜାଣିବାକୁ ଚାହୁଁଛନ୍ତି?');
+            return say('General AI is not connected yet, so I can only answer the portal and cyber-safety topics listed above. Connect the server-side Gemini key to answer other questions. Please do not share personal or financial details here.', 'ସାଧାରଣ AI ଏଯାଏଁ ଯୋଡ଼ା ହୋଇନାହିଁ; ଏବେ ମୁଁ ଉପରେ ଥିବା portal ଓ cyber-safety ବିଷୟରେ ଉତ୍ତର ଦେଇପାରିବି। ଅନ୍ୟ ପ୍ରଶ୍ନ ପାଇଁ serverରେ Gemini key ଯୋଡ଼ନ୍ତୁ। ଏଠାରେ ବ୍ୟକ୍ତିଗତ କିମ୍ବା ଆର୍ଥିକ ତଥ୍ୟ ଲେଖନ୍ତୁନି।');
+        }
+        form.addEventListener('submit', async event => {
+            event.preventDefault();
+            const question = input.value.trim();
+            if (!question) return;
+            const user = document.createElement('div'); user.className='ml-auto max-w-3xl rounded-2xl rounded-tr-sm bg-violet-700 p-3 text-sm text-white'; user.textContent=question;
+            const bot = document.createElement('div'); bot.className='max-w-3xl rounded-2xl rounded-tl-sm border border-cyan-700/50 bg-slate-950 p-4 text-sm text-slate-100';
+            messages.append(user);
+            bot.textContent='Thinking…';
+            messages.append(bot);
+            messages.scrollTop=messages.scrollHeight;
+            input.value=''; input.disabled=true;
+            try {
+                const response = await fetch('/api/assistant', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question})});
+                const data = await response.json();
+                if (response.ok && data.answer) bot.textContent=data.answer;
+                else if (response.status === 503 && data.answer) bot.textContent=replyFor(question);
+                else bot.textContent=replyFor(question);
+            } catch (_) {
+                bot.textContent=replyFor(question);
+            } finally {
+                input.disabled=false; input.focus(); messages.scrollTop=messages.scrollHeight;
+            }
+        });
+    })();
+    </script>
 
     <!-- DEVELOPER CARD -->
     <section class="py-10 px-4 md:px-12 max-w-7xl mx-auto w-full">
@@ -2414,7 +2516,7 @@ LIVE_CHECKER_PAGE = '''
 
             let url;
             try {
-                url = new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
+                url = new URL(/^https?:[/][/]/i.test(raw) ? raw : 'https://' + raw);
             } catch (_error) {
                 showError('This does not look like a valid web URL. Check the spelling and try again.');
                 return;
@@ -2456,14 +2558,15 @@ LIVE_CHECKER_PAGE = '''
             if (host.length > 45) flag(8, 'Unusually long hostname', 'Long hostnames can make deceptive names harder to notice.');
             if (labels.some(label => label.length > 30)) flag(8, 'Unusually long domain label', 'One part of the hostname is unusually long.');
             if (labels.some(label => label.startsWith('xn--'))) flag(18, 'Internationalized / punycode domain', 'Some lookalike characters may resemble ordinary letters. Inspect the domain carefully.');
-            const hasLatin = /[a-z]/i.test(host), hasCyrillic = /[\u0400-\u04ff]/.test(host), hasGreek = /[\u0370-\u03ff]/.test(host);
+            const hasScriptRange = (text, start, end) => Array.from(text).some(ch => { const cp = ch.codePointAt(0); return cp >= start && cp <= end; });
+            const hasLatin = /[a-z]/i.test(host), hasCyrillic = hasScriptRange(host, 0x0400, 0x04ff), hasGreek = hasScriptRange(host, 0x0370, 0x03ff);
             if ((hasCyrillic || hasGreek) && hasLatin) flag(22, 'Mixed-script hostname', 'The hostname combines writing systems; some characters may visually imitate Latin letters.');
-            else if (/[^\x00-\x7f]/.test(host) && !labels.some(label => label.startsWith('xn--'))) flag(12, 'Unicode hostname', 'International characters can be legitimate, but inspect the displayed domain carefully.');
+            else if (Array.from(host).some(ch => ch.codePointAt(0) > 0x7f) && !labels.some(label => label.startsWith('xn--'))) flag(12, 'Unicode hostname', 'International characters can be legitimate, but inspect the displayed domain carefully.');
             if (knownShorteners.has(host)) flag(12, 'Shortened link', 'The final destination is hidden until the link is expanded safely.');
             if (url.port && !['80','443'].includes(url.port)) flag(10, 'Non-standard web port', 'The link uses a port that ordinary public websites rarely need.');
             if (/(%[0-9a-f]{2}){3,}/i.test(raw) || /%25[0-9a-f]{2}/i.test(raw)) flag(10, 'Encoded URL content', 'Repeated or nested URL encoding can hide the intended destination.');
             if (url.href.length > 180) flag(7, 'Very long full URL', 'A long path or query makes the destination harder to inspect.');
-            if (/[\u0590-\u08ff\u2000-\u206f]/.test(raw)) flag(18, 'Non-Latin or direction-control characters', 'Special characters can make a link appear different from its true address.');
+            if (hasScriptRange(raw, 0x0590, 0x08ff) || hasScriptRange(raw, 0x2000, 0x206f)) flag(18, 'Non-Latin or direction-control characters', 'Special characters can make a link appear different from its true address.');
             const words = (host + url.pathname + url.search).toLowerCase().match(/[a-z]{4,}/g) || [];
             const matchedLures = [...new Set(words.filter(word => lureWords.some(lure => word.includes(lure))))];
             if (matchedLures.length) flag(Math.min(18, 6 + matchedLures.length * 3), 'Common scam lure wording', 'Found: ' + matchedLures.slice(0, 5).join(', ') + '. These words alone do not prove fraud.');
@@ -2844,9 +2947,12 @@ DASHBOARD_PAGE = '''
                     <input type="hidden" id="gps_lat" name="gps_lat">
                     <input type="hidden" id="gps_lon" name="gps_lon">
 
+                    <p class="text-[11px] text-gray-600">GPS is an estimate. Check the accuracy below, drag the map pin to the right place if needed, and edit the address manually.</p>
                     <div id="map_card_box" class="hidden bg-white p-3 rounded-xl border border-blue-300 text-center space-y-2">
-                        <p class="text-xs font-bold text-gray-700">📍 Live Real-Time Satellite / OpenStreetMap Location:</p>
+                        <p class="text-xs font-bold text-gray-700">📍 Your estimated location — drag the pin to correct it:</p>
+                        <p id="gps_accuracy_status" class="rounded-lg bg-slate-100 p-2 text-xs font-bold text-slate-700" aria-live="polite"></p>
                         <div id="live_leaflet_map" class="w-full h-48 rounded-xl border-2 border-red-500"></div>
+                        <p class="text-[11px] text-gray-600">The mapped address may be approximate. Confirm the place before submitting.</p>
                     </div>
                 </div>
 
@@ -2875,6 +2981,22 @@ DASHBOARD_PAGE = '''
         let realMap = null;
         let realMarker = null;
 
+        async function setAddressFromCoordinates(lat, lon) {
+            const addr = document.getElementById('present_address');
+            const latField = document.getElementById('gps_lat');
+            const lonField = document.getElementById('gps_lon');
+            latField.value = Number(lat).toFixed(6);
+            lonField.value = Number(lon).toFixed(6);
+            try {
+                const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`);
+                if (!response.ok) throw new Error('Reverse geocoding unavailable');
+                const data = await response.json();
+                addr.value = (data && data.display_name ? data.display_name + ' · ' : 'Mapped address unavailable · ') + `GPS pin: ${Number(lat).toFixed(6)}, ${Number(lon).toFixed(6)}`;
+            } catch (_error) {
+                addr.value = `Address lookup unavailable · GPS pin: ${Number(lat).toFixed(6)}, ${Number(lon).toFixed(6)}. You can edit this address manually.`;
+            }
+        }
+
         function autoDetectRealGPSLocation() {
             let addr = document.getElementById('present_address');
             let latField = document.getElementById('gps_lat');
@@ -2892,37 +3014,41 @@ DASHBOARD_PAGE = '''
 
                 navigator.geolocation.getCurrentPosition(
                     async (pos) => {
-                        let lat = pos.coords.latitude;
-                        let lon = pos.coords.longitude;
-                        latField.value = lat;
-                        lonField.value = lon;
-
-                        try {
-                            let response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-                            let data = await response.json();
-                            if (data && data.display_name) {
-                                addr.value = `${data.display_name} (Accurate GPS Pin: ${lat.toFixed(6)}, ${lon.toFixed(6)})`;
-                            } else {
-                                addr.value = `Real GPS Pin: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
-                            }
-                        } catch (e) {
-                            addr.value = `Real GPS Pin: ${lat.toFixed(6)}, ${lon.toFixed(6)}`;
-                        }
+                        const lat = pos.coords.latitude;
+                        const lon = pos.coords.longitude;
+                        const accuracy = Number.isFinite(pos.coords.accuracy) ? Math.round(pos.coords.accuracy) : null;
+                        const accuracyStatus = document.getElementById('gps_accuracy_status');
+                        latField.value = lat.toFixed(6);
+                        lonField.value = lon.toFixed(6);
+                        accuracyStatus.textContent = accuracy === null
+                            ? 'GPS accuracy was not provided. Check the pin and address manually.'
+                            : `Estimated accuracy: ±${accuracy.toLocaleString()} metres. This is an estimate, not a guarantee.`;
+                        accuracyStatus.className = 'rounded-lg p-2 text-xs font-bold ' + (accuracy === null || accuracy > 1000 ? 'bg-rose-100 text-rose-800' : accuracy > 100 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900');
 
                         mapBox.classList.remove('hidden');
-                        
+                        await setAddressFromCoordinates(lat, lon);
+
                         if (!realMap) {
                             realMap = L.map('live_leaflet_map').setView([lat, lon], 16);
                             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                                 maxZoom: 19,
                                 attribution: '© OpenStreetMap'
                             }).addTo(realMap);
-                            realMarker = L.marker([lat, lon]).addTo(realMap)
-                                .bindPopup('<b>Citizen Real Location</b>').openPopup();
+                            realMarker = L.marker([lat, lon], {draggable:true}).addTo(realMap)
+                                .bindPopup('<b>Location pin — drag to adjust</b>').openPopup();
+                            realMarker.on('dragend', async (event) => {
+                                const point = event.target.getLatLng();
+                                accuracyStatus.textContent = 'Pin adjusted manually. Updating the mapped address…';
+                                await setAddressFromCoordinates(point.lat, point.lng);
+                                accuracyStatus.textContent = 'Pin adjusted manually. GPS accuracy does not apply to this manual adjustment; please confirm the address.';
+                                accuracyStatus.className = 'rounded-lg bg-blue-100 p-2 text-xs font-bold text-blue-900';
+                            });
                         } else {
                             realMap.setView([lat, lon], 16);
                             realMarker.setLatLng([lat, lon]);
+                            accuracyStatus.className = 'rounded-lg p-2 text-xs font-bold ' + (accuracy === null || accuracy > 1000 ? 'bg-rose-100 text-rose-800' : accuracy > 100 ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900');
                         }
+                        setTimeout(() => realMap.invalidateSize(), 100);
                     },
                     (err) => {
                         alert("⚠️ GPS Access Denied or Unavailable! Please enable Location Services / GPS in your Mobile/Browser settings.");
@@ -3374,6 +3500,60 @@ def send_admin_chat():
 @app.route('/live-checker')
 def live_checker():
     return render_template_string(LIVE_CHECKER_PAGE)
+
+@app.route('/api/assistant', methods=['POST'])
+def assistant_reply():
+    """Optional general-purpose assistant. The API key stays on the server."""
+    payload = request.get_json(silent=True) or {}
+    question = str(payload.get('question', '')).strip()
+    if not question or len(question) > 500:
+        return jsonify(answer='Please enter a question under 500 characters.'), 400
+
+    api_key = os.environ.get('GEMINI_API_KEY', '').strip()
+    if not api_key:
+        return jsonify(answer='The AI assistant is not connected yet. Add GEMINI_API_KEY in the server environment to enable general questions.'), 503
+
+    model = os.environ.get('GEMINI_MODEL', 'gemini-3.5-flash-lite').strip()
+    if not re.fullmatch(r'[A-Za-z0-9._-]{1,80}', model):
+        return jsonify(answer='The AI model setting is invalid.'), 500
+
+    request_body = {
+        'systemInstruction': {'parts': [{'text': (
+            'You are the CyberShield demo portal assistant. Answer general questions helpfully and clearly. '
+            'Reply in the language/script the user used; understand English, Odia script, and Romanized Odia. '
+            'Be honest when uncertain and never claim a demo report is an official police filing. '
+            'For ongoing financial cyber fraud, advise calling India cybercrime helpline 1930 promptly and '
+            'contacting the bank through its official channel. Never ask for or repeat passwords, OTPs, UPI PINs, '
+            'bank credentials, or private complaint details. Do not provide instructions for wrongdoing. '
+            'You have no live web access; say so for current facts that need verification.'
+        )}]},
+        'contents': [{'role': 'user', 'parts': [{'text': question}]}],
+        'generationConfig': {'temperature': 0.4, 'maxOutputTokens': 900},
+    }
+    endpoint = f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
+    api_request = URLRequest(
+        endpoint,
+        data=json.dumps(request_body).encode('utf-8'),
+        headers={'Content-Type': 'application/json', 'x-goog-api-key': api_key},
+        method='POST',
+    )
+    try:
+        with urlopen(api_request, timeout=20) as response:
+            result = json.loads(response.read().decode('utf-8'))
+        answer = ''.join(
+            part.get('text', '')
+            for part in result.get('candidates', [{}])[0].get('content', {}).get('parts', [])
+            if isinstance(part, dict)
+        ).strip()
+        if not answer:
+            return jsonify(answer='I could not generate an answer for that question. Please try rephrasing it.'), 502
+        return jsonify(answer=answer)
+    except HTTPError as exc:
+        app.logger.warning('Gemini assistant returned HTTP %s', exc.code)
+        return jsonify(answer='The AI service could not answer right now. Please try again shortly.'), 502
+    except (URLError, TimeoutError, json.JSONDecodeError, OSError, ValueError) as exc:
+        app.logger.warning('Gemini assistant request failed: %s', type(exc).__name__)
+        return jsonify(answer='The AI service is temporarily unreachable. Please try again shortly.'), 502
 
 @app.route('/select-category')
 def select_category():
