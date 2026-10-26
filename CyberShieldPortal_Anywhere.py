@@ -29,9 +29,9 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax',
     SESSION_COOKIE_SECURE=os.environ.get('CYBERSHIELD_HTTPS', '').lower() == 'true',
 )
-# Fixed demo credentials requested for the local hackathon build.
-ADMIN_ID = '9078031122'
-ADMIN_PASSWORD = '@sashi00Q'
+# Configure administrator credentials in the hosting environment; never commit passwords.
+ADMIN_ID = os.environ.get('CYBERSHIELD_ADMIN_ID', '').strip()
+ADMIN_PASSWORD = os.environ.get('CYBERSHIELD_ADMIN_PASSWORD', '')
 ALLOWED_UPLOAD_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'webp', 'txt', 'mp3', 'wav', 'ogg', 'm4a', 'mp4', 'webm', 'mov'}
 ODISHA_DISTRICTS = ['Angul', 'Balangir', 'Balasore', 'Bargarh', 'Bhadrak', 'Boudh', 'Cuttack', 'Deogarh', 'Dhenkanal', 'Gajapati', 'Ganjam', 'Jagatsinghpur', 'Jajpur', 'Jharsuguda', 'Kalahandi', 'Kandhamal', 'Kendrapara', 'Kendujhar', 'Khordha', 'Koraput', 'Malkangiri', 'Mayurbhanj', 'Nabarangpur', 'Nayagarh', 'Nuapada', 'Puri', 'Rayagada', 'Sambalpur', 'Subarnapur', 'Sundargarh']
 _DISTRICT_CANONICAL = {name.casefold(): name for name in ODISHA_DISTRICTS}
@@ -1171,10 +1171,10 @@ HOME_PAGE = '''
             <div class="space-y-3">
                 <h4 class="text-sm font-black text-white uppercase tracking-wide border-b border-gray-700 pb-2">CONTACT US - LEAD DEVELOPER</h4>
                 <p class="font-black text-white text-sm"><i class="fa-solid fa-user text-yellow-400 mr-2"></i>Sashikanta Mohanty</p>
-                <p class="text-gray-400">Father: Pradeep Kumar Mohanty | Mother: Arati Mohanty</p>
+
                 <p class="text-gray-400"><i class="fa-solid fa-graduation-cap text-yellow-400 mr-2"></i>B.Tech 1st Year, IIIT Bhubaneswar (IT Branch)</p>
                 <p class="text-gray-300"><i class="fa-solid fa-envelope text-yellow-400 mr-2"></i><a href="mailto:sashikantamohanty797@gmail.com" class="hover:text-yellow-400">sashikantamohanty797@gmail.com</a></p>
-                <p class="text-gray-400"><i class="fa-solid fa-location-dot text-yellow-400 mr-2"></i>Odisha, Bhadrak - 756115</p>
+                <p class="text-gray-400"><i class="fa-solid fa-location-dot text-yellow-400 mr-2"></i>Odisha, India</p>
             </div>
         </div>
         <div class="max-w-7xl mx-auto pt-6 border-t border-gray-800 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -3242,7 +3242,7 @@ def website_policies():
 
 @app.route('/privacy-policy')
 def privacy_policy():
-    return render_template_string(POLICY_PAGE_TEMPLATE, title='Privacy Policy', summary='Learn what information this application may collect, how the current build stores it, and how to contact the operator.', notice='Security note: the reviewed build stores account passwords without safe hashing and does not restrict uploaded files per user. Do not submit real sensitive information until those issues are fixed.', sections=PRIVACY_SECTIONS)
+    return render_template_string(POLICY_PAGE_TEMPLATE, title='Privacy Policy', summary='Learn what information this application may collect, how the current build stores it, and how to contact the operator.', notice='Security note: the reviewed build hashes account passwords and requires an authorized session to access uploaded evidence. This is a hackathon demo, not a production security certification; do not submit sensitive real-world information.', sections=PRIVACY_SECTIONS)
 
 @app.route('/')
 def home():
