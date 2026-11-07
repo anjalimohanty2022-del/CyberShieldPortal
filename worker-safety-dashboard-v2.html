@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Worker Safety Dashboard</title>
+<style>
+:root{--bg:#f3f4f1;--card:#fff;--tx:#1d2125;--mut:#667085;--bd:#dcdfd8;--ok:#13804a;--warn:#c27c00;--bad:#d92d20;--acc:#1f5fbf;--hz:#f2b705;color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101316;--card:#1a1f24;--tx:#e9ecef;--mut:#98a2b0;--bd:#2b323a;--ok:#2fbf71;--warn:#f0a500;--bad:#ff5a4d;--acc:#6aa5ff;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#101316;--card:#1a1f24;--tx:#e9ecef;--mut:#98a2b0;--bd:#2b323a;--ok:#2fbf71;--warn:#f0a500;--bad:#ff5a4d;--acc:#6aa5ff;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--tx);padding:0 14px 28px}
+header{display:flex;flex-wrap:wrap;gap:10px;justify-content:space-between;align-items:center;padding:16px 0 12px;border-bottom:6px solid var(--hz);margin-bottom:14px}
+h1{font-size:21px;margin:0}h2{font-size:16px;margin:18px 0 8px}h3{font-size:15px;margin:0 0 10px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+input[type=password]{padding:8px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx);width:140px;font:inherit}
+button{padding:8px 12px;border:1px solid var(--bd);border-radius:8px;background:var(--card);color:var(--tx);cursor:pointer;font:inherit}
+button:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button.bad{background:var(--bad);color:#fff;border-color:var(--bad)}button.sm{padding:3px 8px;font-size:12px}
+#banner{background:var(--bad);color:#fff;padding:12px 14px;border-radius:10px;font-weight:600;margin-bottom:12px;animation:bl 1s infinite alternate}
+@media (prefers-reduced-motion:reduce){#banner{animation:none}}
+@keyframes bl{to{opacity:.7}}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.st{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px}.st b{font-size:22px;display:block}.st small{color:var(--mut)}
+.workers{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px}
+.wc{background:var(--card);border:1px solid var(--bd);border-left:5px solid var(--ok);border-radius:10px;padding:10px;cursor:pointer}
+.wc.warn{border-left-color:var(--warn)}.wc.danger{border-left-color:var(--bad);background:color-mix(in srgb,var(--bad) 12%,var(--card))}
+.wc.sel{outline:2px solid var(--acc)}
+.top{display:flex;justify-content:space-between;gap:6px}
+.pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;color:#fff;background:var(--ok);height:fit-content}.pill.warn{background:var(--warn)}.pill.danger{background:var(--bad)}
+.vit{display:flex;gap:10px;margin:8px 0 4px;font-weight:600;font-size:14px;flex-wrap:wrap}.vit i{font-style:normal;font-weight:400;color:var(--mut);font-size:11px;margin-left:2px}
+.wc svg{width:100%;height:28px}
+polyline{fill:none;stroke:var(--acc);stroke-width:1.8;vector-effect:non-scaling-stroke}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-top:14px}
+.col{display:flex;flex-direction:column;gap:12px;min-width:0}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+#chart{width:100%;height:180px;background:color-mix(in srgb,var(--acc) 6%,transparent);border-radius:8px;margin:8px 0}
+.thr{stroke:var(--bad);stroke-dasharray:4 4;stroke-width:1;vector-effect:non-scaling-stroke}
+.scroll{overflow:auto;max-height:340px}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--bd);vertical-align:top}
+tr.pend td{background:color-mix(in srgb,var(--bad) 10%,transparent)}
+.bar{height:5px;background:var(--acc);border-radius:3px;margin-bottom:2px}
+.zone{fill:color-mix(in srgb,var(--acc) 7%,var(--card));stroke:var(--bd);stroke-width:1.5}.zone.zd{stroke:var(--bad);stroke-width:3;fill:color-mix(in srgb,var(--bad) 12%,var(--card))}
+.zl{fill:var(--mut);font-size:13px;font-weight:600}
+.rz{fill:color-mix(in srgb,var(--bad) 22%,transparent);stroke:var(--bad);stroke-dasharray:5 4}
+polyline.trail{stroke-width:2;opacity:.4}
+.dot{cursor:pointer}.dot circle{fill:var(--ok);stroke:var(--card);stroke-width:2}.dot.warn circle{fill:var(--warn)}.dot.danger circle{fill:var(--bad)}.dot.sel circle{stroke:var(--acc);stroke-width:3}
+.dot text{fill:#fff;font-size:10px;font-weight:700;pointer-events:none}
+.pin-t{font-size:11px;fill:var(--bad);font-weight:700}
+#map{width:100%;height:auto;max-height:400px}
+code{font-size:11px;word-break:break-all}small{color:var(--mut)}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Worker Safety Dashboard</h1><small id="clock"></small></div>
+  <div class="row">
+    <label class="row"><input type="checkbox" id="snd" checked> Siren</label>
+    <button id="theme">Dark / light</button>
+    <input id="pass" type="password" placeholder="Supervisor key" aria-label="Supervisor key">
+    <button id="unlock">Unlock</button><span id="lk">🔒 Locked</span>
+  </div>
+</header>
+<div id="banner" hidden></div>
+<small>Demo key: safety123. Alarm details stay encrypted until the supervisor key is entered.</small>
+<section class="stats" id="stats" style="margin-top:10px"></section>
+<h2>Live workers</h2>
+<section class="workers" id="workers"></section>
+<h2>Live location, factory map</h2>
+<div class="card"><svg id="map" viewBox="0 0 620 280" role="img" aria-label="Live factory map with worker positions"></svg>
+<div class="row"><button id="bRz">Send selected worker to restricted area</button><small>Dots move live and leave a trail. After an alarm is unlocked, a red ring marks where it happened.</small></div></div>
+<main>
+  <div class="col">
+    <div class="card">
+      <h3 id="dTitle"></h3>
+      <div id="dLive"></div>
+      <svg id="chart" viewBox="0 0 600 180" preserveAspectRatio="none"></svg>
+      <small>Heart rate, last 60 seconds. Dashed line is the 115 bpm warning level.</small>
+      <div class="row" style="margin-top:10px">
+        <button class="bad" id="bFall">Simulate fall</button>
+        <button class="bad" id="bSlip">Simulate slip</button>
+        <button id="bHr">Simulate health spike</button>
+      </div>
+    </div>
+    <div class="card"><h3>Health history, last 7 days</h3><div class="scroll"><table id="hist"></table></div></div>
+  </div>
+  <div class="col">
+    <div class="card"><div class="row" style="justify-content:space-between"><h3>Accident history</h3><button class="sm" id="csv">Download CSV</button></div><div class="scroll"><table id="acc"></table></div></div>
+  </div>
+</main>
+<script>
+const $=i=>document.getElementById(i);
+const PASS='safety123';
+const W=[
+ {id:'W1',name:'Ramesh Das',zone:'Zone A, crane'},
+ {id:'W2',name:'Suresh Nayak',zone:'Zone B, welding'},
+ {id:'W3',name:'Bibhu Sahoo',zone:'Zone C, scaffold'},
+ {id:'W4',name:'Pradeep Mohanty',zone:'Zone A, crane'},
+ {id:'W5',name:'Anil Behera',zone:'Zone D, store'}];
+let sel=0,KEY=null,SEND=null,CHECK='',alerts=[],dec={};
+const enc=new TextEncoder(),dc=new TextDecoder();
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const seeded=n=>{let s=n*9301+49297;return()=>{s=(s*9301+49297)%233280;return s/233280}};
+W.forEach((w,i)=>{const r=seeded(i+3);w.base=68+Math.round(r()*14);w.hr=w.base;w.spo2=98;w.temp=36.7;w.spike=0;w.series=Array(60).fill(w.base);
+ w.hist=[...Array(7)].map((_,d)=>{const x=new Date(Date.now()-(7-d)*864e5);return{day:x.toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'}),hr:Math.round(w.base+r()*10),spo2:Math.round(95+r()*4),temp:(36.4+r()*0.7).toFixed(1),inc:r()>.85?1:0}})});
+
+/* ---- live location ---- */
+const Z={A:[20,15],B:[320,15],C:[20,145],D:[320,145]},ZW=280,ZH=115,RZ={x:515,y:195,w:75,h:55};
+const BL=['B+','O+','A+','O-','AB+'];
+const inRZpt=(x,y,m=0)=>x>=RZ.x-m&&x<=RZ.x+RZ.w+m&&y>=RZ.y-m&&y<=RZ.y+RZ.h+m;
+const inRZ=w=>inRZpt(w.x,w.y);
+const zoneAt=(x,y)=>{for(const k in Z){const[a,b]=Z[k];if(x>=a&&x<=a+ZW&&y>=b&&y<=b+ZH)return k}return'?'};
+function newTarget(w){const[a,b]=Z[w.home];let x,y,t=0;do{x=a+20+Math.random()*240;y=b+42+Math.random()*58}while(inRZpt(x,y,12)&&t++<20);w.tx=x;w.ty=y}
+W.forEach((w,i)=>{w.home=(/Zone\s*([A-D])/.exec(w.zone)||[0,'A'])[1];const[a,b]=Z[w.home];
+ w.x=a+20+Math.random()*240;w.y=b+42+Math.random()*58;if(inRZ(w))w.x=a+40;
+ w.trail=[[w.x,w.y]];w.stay=0;w.down=false;w.force=false;w.inrz=false;w.blood=BL[i%5];w.contact='98765 4321'+i+' (demo)';newTarget(w)});
+
+/* ---- encryption (AES-GCM, key from passphrase) ---- */
+const b64=u=>btoa(String.fromCharCode(...u));
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+async function keyFrom(p){const m=await crypto.subtle.importKey('raw',enc.encode(p),'PBKDF2',false,['deriveKey']);
+ return crypto.subtle.deriveKey({name:'PBKDF2',salt:enc.encode('worker-safety-v1'),iterations:100000,hash:'SHA-256'},m,{name:'AES-GCM',length:256},false,['encrypt','decrypt'])}
+async function encrypt(o){const iv=crypto.getRandomValues(new Uint8Array(12));
+ const ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv},SEND,enc.encode(JSON.stringify(o))));return b64(iv)+'.'+b64(ct)}
+async function decrypt(s,k){const[i,c]=s.split('.');return JSON.parse(dc.decode(await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(i)},k,unb64(c))))}
+async function tryDec(a){try{dec[a.id]=await decrypt(a.ct,KEY)}catch(e){}}
+function save(){try{localStorage.setItem('wsd1',JSON.stringify(alerts))}catch(e){}}
+
+/* ---- status ---- */
+const LBL={safe:'SAFE',warn:'WARNING',danger:'DANGER'};
+function status(i){const w=W[i];
+ if(alerts.some(a=>a.st==='Pending'&&dec[a.id]&&dec[a.id].wid===w.id))return'danger';
+ if(w.hr>115||w.spo2<93||w.temp>38||inRZ(w))return'warn';return'safe'}
+const path=(a,w,h,mn,mx)=>a.map((v,i)=>(i/(a.length-1)*w).toFixed(1)+','+(h-(v-mn)/(mx-mn)*h).toFixed(1)).join(' ');
+
+/* ---- render ---- */
+function renderStats(){const p=alerts.filter(a=>a.st==='Pending').length;const rs=alerts.filter(a=>a.ackTs).map(a=>(a.ackTs-a.ts)/1000),rt=rs.length?Math.round(rs.reduce((x,y)=>x+y,0)/rs.length)+' s':'—';const avg=Math.round(W.reduce((s,w)=>s+w.hr,0)/W.length);
+ $('stats').innerHTML=[['Workers online',W.length],['Active alarms',p],['Total incidents',alerts.length],['Average heart rate',avg+' bpm'],['Avg response time',rt]].map(x=>`<div class="st"><b>${x[1]}</b><small>${x[0]}</small></div>`).join('')}
+function renderWorkers(){$('workers').innerHTML=W.map((w,i)=>{const s=status(i);
+ return `<div class="wc ${s}${i===sel?' sel':''}" data-i="${i}" tabindex="0"><div class="top"><b>${w.name}</b><span class="pill ${s}">${LBL[s]}</span></div><small>${w.id}, ${w.zone}</small>
+ <div class="vit"><span>❤️ ${Math.round(w.hr)}<i>bpm</i></span><span>🫁 ${Math.round(w.spo2)}<i>%</i></span><span>🌡 ${w.temp.toFixed(1)}<i>°C</i></span></div>
+ <svg viewBox="0 0 100 24" preserveAspectRatio="none"><polyline points="${path(w.series,100,24,40,170)}"/></svg></div>`}).join('')}
+function renderDetail(){const w=W[sel],s=status(sel),ty=180-(115-40)/130*180;
+ $('dTitle').textContent=w.name+', live health';
+ $('dLive').innerHTML=`<span class="pill ${s}">${LBL[s]}</span> <b>${Math.round(w.hr)}</b> bpm, SpO₂ <b>${Math.round(w.spo2)}%</b>, temperature <b>${w.temp.toFixed(1)}°C</b><br><small>📍 Zone ${zoneAt(w.x,w.y)}, position ${Math.round(w.x)}, ${Math.round(w.y)}${inRZ(w)?' ⚠ IN RESTRICTED AREA':''}${w.down?' (not moving)':''}<br>Blood group ${w.blood}, emergency contact ${w.contact}</small>`;
+ $('chart').innerHTML=`<line class="thr" x1="0" x2="600" y1="${ty}" y2="${ty}"/><polyline points="${path(w.series,600,180,40,170)}"/>`}
+function renderHist(){const w=W[sel];
+ $('hist').innerHTML='<tr><th>Day</th><th>Avg heart rate</th><th>Lowest SpO₂</th><th>Avg temp</th><th>Incidents</th></tr>'+
+ w.hist.map(h=>`<tr><td>${h.day}</td><td><div class="bar" style="width:${Math.max(5,(h.hr-50)*2)}%"></div>${h.hr} bpm</td><td>${h.spo2}%</td><td>${h.temp}°C</td><td>${h.inc}</td></tr>`).join('')}
+function renderAcc(){
+ $('acc').innerHTML='<tr><th>Time</th><th>Details</th><th>Status</th></tr>'+alerts.slice().reverse().map(a=>{const d=dec[a.id];
+ const t=new Date(a.ts).toLocaleString('en-IN',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+ return `<tr class="${a.st==='Pending'?'pend':''}"><td>${t}</td><td>${d?`<b>${d.type}</b>, ${d.name}<br><small>${d.zone}, ${d.hr} bpm${d.x!=null?', location '+d.x+', '+d.y:''}</small>`:`🔒 <code>${a.ct.slice(0,28)}…</code>`}</td><td>${a.st==='Pending'&&Date.now()-a.ts>60000?'ESCALATED':a.st}${KEY&&a.st==='Pending'?`<br><button class="sm" data-ack="${a.id}">Acknowledge</button>`:''}</td></tr>`}).join('')}
+function renderBanner(){const p=alerts.filter(a=>a.st==='Pending'),b=$('banner');
+ if(!p.length){b.hidden=true;return}
+ b.hidden=false;const esc2=p.some(a=>Date.now()-a.ts>60000);b.style.background=esc2?'#7a0f08':'';const d=dec[p[p.length-1].id];
+ b.textContent=d?`🚨 ${d.type.toUpperCase()}: ${d.name}, ${d.zone} (${p.length} active)${esc2?' ESCALATED to second supervisor':''}`:`🚨 ${p.length} encrypted alarm(s) received. Enter the supervisor key to read.${esc2?' ESCALATED: nobody responded within 60 s.':''}`}
+function renderMap(){
+ let h='';
+ for(const k in Z){const[x,y]=Z[k],ws=W.filter(w=>zoneAt(w.x,w.y)===k),dz=ws.some(w=>status(W.indexOf(w))==='danger');
+  h+=`<rect class="zone${dz?' zd':''}" x="${x}" y="${y}" width="${ZW}" height="${ZH}" rx="8"/><text class="zl" x="${x+12}" y="${y+22}">Zone ${k} (${ws.length})</text>`}
+ h+=`<rect class="rz" x="${RZ.x}" y="${RZ.y}" width="${RZ.w}" height="${RZ.h}" rx="4"/><text class="zl" x="${RZ.x+2}" y="${RZ.y-5}" style="font-size:10px">Restricted</text>`;
+ W.forEach(w=>{h+=`<polyline class="trail" points="${w.trail.map(q=>q[0].toFixed(0)+','+q[1].toFixed(0)).join(' ')}"/>`});
+ W.forEach((w,i)=>{const s=status(i);
+  h+=`<g class="dot ${s}${i===sel?' sel':''}" data-i="${i}" tabindex="0"><circle cx="${w.x.toFixed(1)}" cy="${w.y.toFixed(1)}" r="13"/><text x="${w.x.toFixed(1)}" y="${(w.y+4).toFixed(1)}" text-anchor="middle">${w.id}</text><title>${w.name}, ${LBL[s]}</title></g>`});
+ alerts.filter(a=>a.st==='Pending'&&dec[a.id]&&dec[a.id].x!=null).forEach(a=>{const d=dec[a.id];
+  h+=`<circle cx="${d.x}" cy="${d.y}" r="21" fill="none" stroke="var(--bad)" stroke-width="3"/><text class="pin-t" x="${d.x}" y="${d.y-27}" text-anchor="middle">${d.type}</text>`});
+ $('map').innerHTML=h}
+function renderLive(){renderStats();renderWorkers();renderMap();renderDetail();renderBanner();$('clock').textContent='Live, '+new Date().toLocaleTimeString('en-IN')}
+function renderAll(){renderLive();renderHist();renderAcc()}
+
+/* ---- simulation ---- */
+function step(){W.forEach(w=>{
+ if(w.down){}else if(w.stay>0){if(--w.stay===0)newTarget(w)}else{
+  const dx=w.tx-w.x,dy=w.ty-w.y,d=Math.hypot(dx,dy);
+  if(d<4){if(w.force){w.force=false;w.stay=6}else newTarget(w)}else{const v=Math.min(16,d);w.x+=dx/d*v;w.y+=dy/d*v}
+  w.trail.push([w.x,w.y]);if(w.trail.length>20)w.trail.shift()}
+ const was=w.inrz;w.inrz=inRZ(w);if(w.inrz&&!was)siren();
+ if(w.spike>0){w.spike--;w.hr+=rnd(1,6);w.spo2-=rnd(0,.5);w.temp+=.03}
+ else{w.hr+=(w.base-w.hr)*.15+rnd(-2,2);w.spo2+=(98-w.spo2)*.2+rnd(-.2,.2);w.temp+=(36.7-w.temp)*.1+rnd(-.03,.03)}
+ w.hr=Math.max(45,Math.min(170,w.hr));w.spo2=Math.max(80,Math.min(100,w.spo2));w.temp=Math.max(35.5,Math.min(40,w.temp));
+ w.series.push(w.hr);w.series.shift()});renderLive()}
+let ac;function siren(){if(!$('snd').checked)return;
+ try{ac=ac||new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator(),g=ac.createGain();o.connect(g);g.connect(ac.destination);g.gain.value=.12;o.type='square';const t=ac.currentTime;
+ for(let k=0;k<6;k++)o.frequency.setValueAtTime(k%2?600:900,t+k*.4);o.start(t);o.stop(t+2.4)}catch(e){}}
+async function raise(type){const w=W[sel];
+ const a={id:'A'+Date.now(),ct:await encrypt({wid:w.id,name:w.name,zone:'Zone '+zoneAt(w.x,w.y),type,hr:Math.round(w.hr),x:Math.round(w.x),y:Math.round(w.y)}),ts:Date.now(),st:'Pending'};
+ alerts.push(a);if(KEY)await tryDec(a);w.down=true;w.spike=8;save();siren();renderAll()}
+
+/* ---- events ---- */
+$('bFall').onclick=()=>raise('Fall from height');
+$('bSlip').onclick=()=>raise('Slip');
+$('bHr').onclick=()=>{W[sel].spike=15};
+$('bRz').onclick=()=>{const w=W[sel];if(w.down)return;w.tx=RZ.x+RZ.w/2;w.ty=RZ.y+RZ.h/2;w.force=true;w.stay=0};
+$('map').onclick=e=>{const c=e.target.closest('.dot');if(c){sel=+c.dataset.i;renderAll()}};
+$('theme').onclick=()=>{const r=document.documentElement;r.dataset.theme=getComputedStyle(r).colorScheme==='dark'?'light':'dark'};
+$('csv').onclick=()=>{const q=v=>'"'+String(v).replace(/"/g,'""')+'"';
+ const rows=[['time','worker','type','zone','status','response_seconds']].concat(alerts.map(a=>{const d=dec[a.id]||{};return[new Date(a.ts).toISOString(),d.name||'(encrypted)',d.type||'(encrypted)',d.zone||'',a.st,a.ackTs?Math.round((a.ackTs-a.ts)/1000):'']}));
+ const u=URL.createObjectURL(new Blob([rows.map(r=>r.map(q).join(',')).join('\n')],{type:'text/csv'}));
+ const l=document.createElement('a');l.href=u;l.download='accident-history.csv';l.click();URL.revokeObjectURL(u)};
+$('workers').onclick=e=>{const c=e.target.closest('.wc');if(c){sel=+c.dataset.i;renderAll()}};
+$('workers').onkeydown=e=>{if(e.key==='Enter'){const c=e.target.closest('.wc');if(c){sel=+c.dataset.i;renderAll()}}};
+$('acc').onclick=e=>{const id=e.target.dataset.ack;if(!id)return;const a=alerts.find(x=>x.id===id);if(a){a.st='Resolved';a.ackTs=Date.now();const d=dec[a.id],w=d&&W.find(x=>x.id===d.wid);if(w){w.down=false;newTarget(w)}save();renderAll()}};
+$('unlock').onclick=async()=>{
+ if(KEY){KEY=null;dec={};$('unlock').textContent='Unlock';$('lk').textContent='🔒 Locked';$('pass').value='';renderAll();return}
+ try{const k=await keyFrom($('pass').value);if(await decrypt(CHECK,k)!=='ok')throw 0;KEY=k}
+ catch(e){$('lk').textContent='❌ Wrong key';return}
+ await Promise.all(alerts.map(tryDec));$('unlock').textContent='Lock';$('lk').textContent='🔓 Unlocked';renderAll()};
+$('pass').onkeydown=e=>{if(e.key==='Enter')$('unlock').click()};
+
+/* ---- start ---- */
+(async()=>{
+ SEND=await keyFrom(PASS);CHECK=await encrypt('ok');
+ try{alerts=JSON.parse(localStorage.getItem('wsd1')||'[]')}catch(e){alerts=[]}
+ if(!alerts.length){
+  for(const[i,t,h]of[[2,'Fall from height',30],[0,'Slip',75]]){const w=W[i];
+   alerts.push({id:'S'+i,ct:await encrypt({wid:w.id,name:w.name,zone:w.zone,type:t,hr:122+i}),ts:Date.now()-h*36e5,st:'Resolved'})}
+  save()}
+ renderAll();setInterval(step,1000)})();
+</script>
+</body>
+</html>
