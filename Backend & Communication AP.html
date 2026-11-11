@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SafeGuard-RV | Backend & Communication API</title>
+<style>
+:root{--bg:#0b1020;--panel:#131a31;--line:#25305a;--tx:#e8ecff;--mut:#8f9bc7;--ok:#2ee59d;--bad:#ff4d6d;--warn:#ffc857;--acc:#5b8cff;--cy:#22d3ee}
+@media (prefers-color-scheme: light){:root{--bg:#eef2ff;--panel:#fff;--line:#d5dcf5;--tx:#141a33;--mut:#5a668f}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 system-ui,Segoe UI,Roboto,sans-serif;padding:16px;padding-top:calc(16px + env(safe-area-inset-top,0px));padding-bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+h1{margin:0;font-size:22px}
+h2{margin:0 0 10px;font-size:15px;color:var(--cy);letter-spacing:.5px;text-transform:uppercase}
+.top{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;animation:down .6s ease both}
+.sub{color:var(--mut);font-size:13px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;border:1px solid var(--line);background:var(--panel);font-size:12px}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--ok);animation:pulse 1.6s infinite}
+.dot.warn{background:var(--warn)}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;animation:up .6s ease both}
+.card:nth-child(2){animation-delay:.08s}.card:nth-child(3){animation-delay:.16s}.card:nth-child(4){animation-delay:.24s}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px;text-align:center;animation:up .5s ease both}
+.stat b{display:block;font-size:24px;transition:transform .25s}
+.stat b.bump{transform:scale(1.35)}
+.stat span{font-size:11px;color:var(--mut)}
+.s-ok b{color:var(--ok)}.s-bad b{color:var(--bad)}.s-warn b{color:var(--warn)}.s-acc b{color:var(--acc)}
+label{display:block;font-size:12px;color:var(--mut);margin:8px 0 3px}
+select,input{width:100%;padding:8px;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--tx);font:inherit}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{cursor:pointer;border:0;border-radius:10px;padding:10px 12px;font:600 13px inherit;color:#fff;background:var(--acc);transition:transform .15s,filter .15s}
+button:hover{filter:brightness(1.15);transform:translateY(-1px)}
+button:active{transform:scale(.96)}
+button.red{background:var(--bad)}button.grn{background:#12a874}button.ylw{background:#c99a1a}button.gry{background:#5a668f}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.pipe{display:flex;align-items:center;justify-content:space-between;gap:4px;margin:6px 0}
+.node{flex:1;text-align:center;padding:10px 4px;border-radius:10px;border:1px solid var(--line);font-size:11px;transition:.3s;min-width:0}
+.node.on{border-color:var(--ok);background:rgba(46,229,157,.15);box-shadow:0 0 14px rgba(46,229,157,.4)}
+.node.err{border-color:var(--bad);background:rgba(255,77,109,.15);box-shadow:0 0 14px rgba(255,77,109,.4)}
+.arrow{color:var(--mut);font-size:14px}
+.list{max-height:300px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+.item{border:1px solid var(--line);border-left-width:4px;border-radius:8px;padding:8px 10px;font-size:12px;animation:slide .4s ease both}
+.item.ok{border-left-color:var(--ok)}.item.bad{border-left-color:var(--bad)}.item.warn{border-left-color:var(--warn)}.item.acc{border-left-color:var(--acc)}
+.item b{font-size:12px}
+.tag{float:right;font-size:10px;padding:1px 8px;border-radius:99px;background:var(--line)}
+.item.new{animation:slide .4s ease both,flash 1s ease}
+.log{font:11px ui-monospace,Menlo,monospace;color:var(--mut);max-height:220px;overflow:auto;white-space:pre-wrap}
+.log .e{color:var(--bad)}.log .g{color:var(--ok)}.log .w{color:var(--warn)}
+.bar{height:6px;background:var(--line);border-radius:9px;overflow:hidden;margin-top:6px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--acc),var(--cy));transition:width .3s linear}
+.empty{color:var(--mut);text-align:center;padding:14px;font-size:12px}
+table{width:100%;font-size:12px;border-collapse:collapse}
+td,th{padding:4px;text-align:left;border-bottom:1px solid var(--line)}
+@keyframes up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+@keyframes down{from{opacity:0;transform:translateY(-14px)}to{opacity:1;transform:none}}
+@keyframes slide{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:none}}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(46,229,157,.7)}70%{box-shadow:0 0 0 8px transparent}100%{box-shadow:0 0 0 0 transparent}}
+@keyframes flash{0%{background:rgba(91,140,255,.35)}100%{background:transparent}}
+@media(max-width:520px){.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div>
+    <h1>🛡️ Backend &amp; Communication API</h1>
+    <div class="sub">SafeGuard-RV · AES-128 + AES-CMAC · Replay protection · ACK/Retry</div>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <span class="pill"><span class="dot"></span> API Online</span>
+    <span class="pill"><span class="dot warn"></span> Hardware Link: Pending (Simulated)</span>
+  </div>
+</div>
+
+<div class="stats">
+  <div class="stat s-ok"><b id="stOk">0</b><span>Accepted</span></div>
+  <div class="stat s-bad"><b id="stBad">0</b><span>Rejected</span></div>
+  <div class="stat s-warn"><b id="stDup">0</b><span>Replay / Duplicate</span></div>
+  <div class="stat s-acc"><b id="stAck">0</b><span>ACKs Verified</span></div>
+</div>
+
+<div class="grid">
+
+  <!-- Simulator -->
+  <div class="card">
+    <h2>📡 Wearable Simulator (Sender)</h2>
+    <div class="row">
+      <div><label>Device ID</label><input id="dev" value="SGRV-001"></div>
+      <div><label>Alert type</label>
+        <select id="type"><option>FALL</option><option>SOS</option></select></div>
+    </div>
+    <div class="row">
+      <div><label>Next sequence no.</label><input id="seq" type="number" value="1"></div>
+      <div><label>Location (GPS, optional)</label><input id="loc" value="20.2961, 85.8245"></div>
+    </div>
+    <div class="btns">
+      <button onclick="send('valid')">🚨 Send Valid Alert</button>
+      <button class="gry" onclick="send('replay')">🔁 Replay Last Message</button>
+      <button class="red" onclick="send('tamper')">⚠️ Send Tampered (Bad MAC)</button>
+      <button class="ylw" onclick="fallThenCancel()">✋ Fall → Cancel (5s)</button>
+    </div>
+    <label>ACK network loss (to test retry)</label>
+    <select id="loss">
+      <option value="0">No loss (ACK always arrives)</option>
+      <option value="1">Drop first ACK (1 retry)</option>
+      <option value="2">Drop 2 ACKs (2 retries)</option>
+      <option value="9">Drop all ACKs (timeout / fail)</option>
+    </select>
+    <div class="bar"><i id="cdBar"></i></div>
+    <div class="sub" id="cdTxt" style="margin-top:4px">Cancel countdown idle</div>
+  </div>
+
+  <!-- Pipeline -->
+  <div class="card">
+    <h2>⚙️ Live Message Pipeline</h2>
+    <div class="pipe">
+      <div class="node" id="n1">📟<br>Sender</div><span class="arrow">➜</span>
+      <div class="node" id="n2">🔐<br>AES-128</div><span class="arrow">➜</span>
+      <div class="node" id="n3">✅<br>CMAC</div><span class="arrow">➜</span>
+      <div class="node" id="n4">🔢<br>Seq</div><span class="arrow">➜</span>
+      <div class="node" id="n5">📨<br>ACK</div>
+    </div>
+    <div class="sub" id="pipeTxt" style="margin-top:8px">Waiting for message…</div>
+    <h2 style="margin-top:16px">🔌 API Endpoints</h2>
+    <table>
+      <tr><th>Method</th><th>Path</th><th>Use</th></tr>
+      <tr><td>POST</td><td>/api/emergency</td><td>Receive alert</td></tr>
+      <tr><td>POST</td><td>/api/ack</td><td>Send ACK</td></tr>
+      <tr><td>POST</td><td>/api/cancel</td><td>Cancel alert</td></tr>
+      <tr><td>GET</td><td>/api/alerts</td><td>History</td></tr>
+      <tr><td>GET</td><td>/api/security-log</td><td>Rejected log</td></tr>
+    </table>
+  </div>
+
+  <!-- Live feed -->
+  <div class="card">
+    <h2>🚑 Live Emergency Feed</h2>
+    <div class="list" id="feed"><div class="empty">No alerts yet. Send one from the simulator.</div></div>
+  </div>
+
+  <!-- Device sequence -->
+  <div class="card">
+    <h2>🔢 Device Sequence State</h2>
+    <table id="devTbl"><tr><th>Device</th><th>Last seq</th><th>Alerts</th></tr></table>
+    <h2 style="margin-top:16px">🧾 Security Event Log</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+</div>
+
+<script>
+/* ---------- Tiny crypto simulation (demo only, NOT real AES) ----------
+   Real AES-128/CMAC runs in the RISC-V hardware & Python backend.
+   Here a keyed hash is used so verify/reject behaves exactly the same. */
+const KEY="SafeGuardRV-demo-key";
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return (h>>>0).toString(16).padStart(8,"0")}
+function mac(p){return hash(KEY+JSON.stringify(p))+hash(JSON.stringify(p)+KEY)}
+function enc(p){return btoa(unescape(encodeURIComponent(JSON.stringify(p)))).split("").reverse().join("")}
+function dec(c){return JSON.parse(decodeURIComponent(escape(atob(c.split("").reverse().join("")))))}
+
+/* ---------- State ---------- */
+const lastSeq={}, devCount={}, alerts=[];
+let lastMsg=null, cdTimer=null, busy=false;
+const cnt={ok:0,bad:0,dup:0,ack:0};
+const $=id=>document.getElementById(id);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function log(t,c=""){
+  const d=document.createElement("div");d.className=c;
+  d.textContent="["+new Date().toLocaleTimeString()+"] "+t;
+  $("log").prepend(d);
+}
+function bump(k,id){cnt[k]++;const e=$(id);e.textContent=cnt[k];e.classList.add("bump");setTimeout(()=>e.classList.remove("bump"),250)}
+function node(id,s){const e=$(id);e.className="node "+(s||"")}
+function resetPipe(){["n1","n2","n3","n4","n5"].forEach(n=>node(n))}
+function say(t){$("pipeTxt").textContent=t}
+
+function addFeed(a){
+  if($("feed").querySelector(".empty"))$("feed").innerHTML="";
+  const cls={Accepted:"ok",ACKed:"ok",Rejected:"bad",Duplicate:"warn",Cancelled:"acc",Failed:"bad"}[a.status]||"acc";
+  const d=document.createElement("div");d.className="item new "+cls;d.id="a"+a.id;
+  d.innerHTML=render(a);
+  $("feed").prepend(d);
+}
+function render(a){
+  return `<span class="tag">${a.status}</span><b>${a.type==="SOS"?"🆘":"🧍‍♂️💥"} ${a.type} · ${a.dev}</b><br>seq #${a.seq} · ${a.time}${a.loc?" · 📍"+a.loc:""}<br><span style="color:var(--mut)">${a.note||""}</span>`;
+}
+function upd(a,status,note){
+  a.status=status;if(note)a.note=note;
+  const e=$("a"+a.id);
+  if(e){e.className="item "+({Accepted:"ok",ACKed:"ok",Rejected:"bad",Duplicate:"warn",Cancelled:"acc",Failed:"bad"}[status]||"acc");e.innerHTML=render(a)}
+}
+function devTable(){
+  let h="<tr><th>Device</th><th>Last seq</th><th>Alerts</th></tr>";
+  for(const d in lastSeq)h+=`<tr><td>${d}</td><td>${lastSeq[d]}</td><td>${devCount[d]||0}</td></tr>`;
+  $("devTbl").innerHTML=h;
+}
+
+/* ---------- Sender builds packet ---------- */
+function build(type){
+  const seq=parseInt($("seq").value)||1;
+  const body={dev:$("dev").value.trim()||"SGRV-001",type:type||$("type").value,seq,loc:$("loc").value.trim(),ts:Date.now()};
+  return {cipher:enc(body),tag:mac(body)};
+}
+
+/* ---------- Backend: POST /api/emergency ---------- */
+async function receive(pkt,label){
+  resetPipe();node("n1","on");say("Sender transmitted packet…");await sleep(450);
+  node("n2","on");say("Decrypting with AES-128…");await sleep(450);
+  let body;
+  try{body=dec(pkt.cipher)}catch(e){node("n2","err");say("Decrypt failed");log("REJECT: decrypt failure","e");bump("bad","stBad");return {ok:false}}
+
+  // CMAC verify
+  if(mac(body)!==pkt.tag){
+    node("n3","err");say("❌ AES-CMAC mismatch – message rejected");
+    log(`REJECT ${body.dev} seq ${body.seq}: invalid CMAC (forged/tampered)`,"e");bump("bad","stBad");
+    const a={id:Date.now()+Math.random(),dev:body.dev,type:body.type,seq:body.seq,time:new Date().toLocaleTimeString(),status:"Rejected",note:"Invalid authentication tag"};
+    alerts.push(a);addFeed(a);return {ok:false};
+  }
+  node("n3","on");say("CMAC valid ✔ checking sequence…");await sleep(450);
+
+  // Replay check
+  const last=lastSeq[body.dev]??0;
+  if(body.seq<=last){
+    node("n4","err");say("❌ Replay / duplicate detected");
+    log(`REJECT ${body.dev} seq ${body.seq}: replay (last accepted ${last})`,"w");bump("dup","stDup");
+    const a={id:Date.now()+Math.random(),dev:body.dev,type:body.type,seq:body.seq,time:new Date().toLocaleTimeString(),status:"Duplicate",note:`Seq ${body.seq} ≤ last ${last}`};
+    alerts.push(a);addFeed(a);return {ok:false};
+  }
+  node("n4","on");
+  lastSeq[body.dev]=body.seq;devCount[body.dev]=(devCount[body.dev]||0)+1;devTable();
+  const a={id:Date.now()+Math.random(),dev:body.dev,type:body.type,seq:body.seq,loc:body.loc,time:new Date().toLocaleTimeString(),status:"Accepted",note:"Authenticated, awaiting ACK"};
+  alerts.push(a);addFeed(a);bump("ok","stOk");
+  log(`ACCEPT ${body.dev} seq ${body.seq} (${body.type})`,"g");
+  say("Sequence OK ✔ generating ACK…");await sleep(350);
+  return {ok:true,a,body};
+}
+
+/* ---------- ACK + retry (sender side) ---------- */
+async function deliver(pkt){
+  const maxRetry=3, drop=parseInt($("loss").value);
+  let attempt=0,res=null;
+  while(attempt<=maxRetry){
+    attempt++;
+    if(attempt>1){log(`RETRY #${attempt-1} (no valid ACK received)`,"w");say(`⏳ ACK timeout – retry #${attempt-1}`);await sleep(700)}
+    if(!res||!res.ok){res=await receive(pkt)}
+    else{resetPipe();node("n1","on");say("Retransmitting… receiver sees duplicate");await sleep(300)}
+    if(!res.ok&&attempt===1)return;
+    // ACK generation
+    const ackMac=hash(KEY+"ACK"+res.body.dev+res.body.seq);
+    const lost=attempt<=drop;
+    if(lost){node("n5","err");say("📡 ACK lost in network…");log(`ACK for seq ${res.body.seq} dropped`,"w");await sleep(500);continue}
+    node("n5","on");await sleep(350);
+    if(ackMac===hash(KEY+"ACK"+res.body.dev+res.body.seq)){
+      bump("ack","stAck");upd(res.a,"ACKed",`ACK verified after ${attempt} attempt(s)`);
+      say(`✅ ACK verified (attempt ${attempt})`);log(`ACK verified for seq ${res.body.seq}`,"g");
+      $("seq").value=res.body.seq+1;return;
+    }
+  }
+  upd(res.a,"Failed","No valid ACK after retries – delivery failed");
+  say("❌ Delivery failed after max retries");log(`DELIVERY FAILED seq ${res.body.seq}`,"e");
+}
+
+/* ---------- Buttons ---------- */
+async function send(mode){
+  if(busy)return;busy=true;
+  try{
+    if(mode==="valid"){const p=build();lastMsg=JSON.parse(JSON.stringify(p));await deliver(p)}
+    else if(mode==="replay"){
+      if(!lastMsg){say("Send a valid alert first");busy=false;return}
+      await receive(lastMsg);
+    }else if(mode==="tamper"){
+      const p=build();p.tag="deadbeef"+p.tag.slice(8);await receive(p);
+    }
+  }finally{busy=false}
+}
+
+/* Fall detected -> 5s cancel window -> auto-send */
+function fallThenCancel(){
+  if(cdTimer){clearInterval(cdTimer);cdTimer=null;
+    $("cdBar").style.width="0";$("cdTxt").textContent="Alert CANCELLED by user";
+    const a={id:Date.now(),dev:$("dev").value,type:"FALL",seq:parseInt($("seq").value)||1,time:new Date().toLocaleTimeString(),status:"Cancelled",note:"User pressed cancel – no alert sent"};
+    alerts.push(a);addFeed(a);log("CANCEL received – false alarm prevented","w");return}
+  let t=0;const total=5000;
+  $("cdTxt").textContent="Fall detected! Press this button again to CANCEL…";
+  log("Fall detected – 5s cancel window started","w");
+  cdTimer=setInterval(()=>{
+    t+=100;$("cdBar").style.width=(t/total*100)+"%";
+    $("cdTxt").textContent=`Fall detected – cancel within ${((total-t)/1000).toFixed(1)}s (press button again)`;
+    if(t>=total){clearInterval(cdTimer);cdTimer=null;$("cdBar").style.width="0";
+      $("cdTxt").textContent="Not cancelled → alert sent";
+      $("type").value="FALL";send("valid")}
+  },100);
+}
+log("API server started (simulated mode)","g");
+</script>
+</body>
+</html>
