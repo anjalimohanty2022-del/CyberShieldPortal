@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SafeGuard-RV · Embedded Firmware (Device)</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#eef2f8;--bg2:#dfe8f6;--card:rgba(255,255,255,.82);--tx:#0e1a2e;--mu:#5a6b85;--bd:rgba(20,40,80,.12);--ac:#1f6feb;--ok:#0f9d6b;--wn:#d98a0b;--er:#d93a4a;--code:#0c1424;--ct:#cfe0f7;--sh:0 8px 30px rgba(20,40,90,.08)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#070d19;--bg2:#0d1a33;--card:rgba(18,30,54,.72);--tx:#e9f0fb;--mu:#8ea1bf;--bd:rgba(130,170,255,.14);--ac:#4d94ff;--ok:#33d6a0;--wn:#f2b04a;--er:#ff6b7a;--code:#060b16;--sh:0 10px 40px rgba(0,0,0,.4)}}
+:root[data-theme="dark"]{--bg:#070d19;--bg2:#0d1a33;--card:rgba(18,30,54,.72);--tx:#e9f0fb;--mu:#8ea1bf;--bd:rgba(130,170,255,.14);--ac:#4d94ff;--ok:#33d6a0;--wn:#f2b04a;--er:#ff6b7a;--code:#060b16;--sh:0 10px 40px rgba(0,0,0,.4)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}*{box-sizing:border-box}
+body{margin:0;color:var(--tx);font:14px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(1200px 600px at 15% -10%,var(--bg2),transparent),var(--bg);min-height:100vh;--sc:var(--ok)}
+body[data-s=FALL_DETECTED]{--sc:var(--wn)}body[data-s=BUILD],body[data-s=SEND],body[data-s=WAIT_ACK]{--sc:var(--ac)}body[data-s=FAILED]{--sc:var(--er)}
+.wrap{max-width:1180px;margin:0 auto;padding:18px}
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;margin-bottom:16px;animation:fd .6s both}
+.brand{display:flex;gap:12px;align-items:center}.logo{width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,var(--ac),#7c5cff);display:grid;place-items:center;box-shadow:0 6px 18px rgba(60,100,255,.35)}
+h1{font-size:19px;margin:0;letter-spacing:-.01em}h1 small{display:block;font-weight:500;color:var(--mu);font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid var(--bd);background:var(--card);backdrop-filter:blur(8px)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--mu)}.dot.live{background:var(--sc);animation:blink 1.4s infinite}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(12,1fr)}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px;box-shadow:var(--sh);backdrop-filter:blur(10px);animation:fu .6s both;transition:transform .25s,border-color .25s}
+.c:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--ac) 40%,var(--bd))}
+.c h2{font-size:11px;margin:0 0 12px;text-transform:uppercase;letter-spacing:.09em;color:var(--mu);font-weight:700}
+.s4{grid-column:span 4}.s5{grid-column:span 5}.s6{grid-column:span 6}.s7{grid-column:span 7}.s8{grid-column:span 8}.s12{grid-column:span 12}
+@media(max-width:900px){.s4,.s5,.s6,.s7,.s8{grid-column:span 12}}
+.hero{display:flex;align-items:center;gap:18px;justify-content:center;flex-wrap:wrap}
+.ring{position:relative;width:170px;height:170px}.ring svg{width:100%;height:100%}
+.ring .mid{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.ring b{font-size:15px;letter-spacing:.04em;color:var(--sc)}.ring span{font-size:11px;color:var(--mu)}
+.spin{transform-origin:85px 85px;animation:rot 8s linear infinite}body:not([data-s=IDLE]) .spin{animation-duration:2s}
+.pulse{transform-origin:85px 85px;opacity:0}body:not([data-s=IDLE]):not([data-s=DONE]) .pulse{animation:pl 1.6s ease-out infinite}
+.wave{flex:1;min-width:240px}canvas{width:100%;height:130px;display:block}
+.pipe{display:flex;align-items:center;overflow-x:auto;padding:6px 2px}
+.nd{flex:0 0 auto;text-align:center;min-width:96px}.nd i{display:grid;place-items:center;width:38px;height:38px;margin:0 auto 6px;border-radius:50%;border:2px solid var(--bd);font-style:normal;font-weight:700;font-size:13px;color:var(--mu);transition:.3s;background:var(--card)}
+.nd small{font-size:11px;color:var(--mu);font-weight:600}
+.nd.on i{border-color:var(--ac);color:#fff;background:var(--ac);box-shadow:0 0 0 0 var(--ac);animation:glow 1.4s infinite}.nd.done i{border-color:var(--ok);background:var(--ok);color:#fff}.nd.bad i{border-color:var(--er);background:var(--er);color:#fff}
+.nd.on small,.nd.done small{color:var(--tx)}
+.ln{flex:1;min-width:24px;height:3px;border-radius:3px;background:var(--bd);position:relative;overflow:hidden;margin-bottom:22px}.ln::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,var(--ok),var(--ac));transform:translateX(-101%);transition:transform .5s}.ln.f::after{transform:none}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+button,select{font:inherit;font-weight:600;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;padding:9px 13px;cursor:pointer;transition:transform .15s,box-shadow .2s,opacity .2s}
+button:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 16px rgba(30,80,200,.18)}button:active:not(:disabled){transform:scale(.97)}
+button.p{background:linear-gradient(135deg,var(--ac),#6a5cff);color:#fff;border:0}button.d{background:linear-gradient(135deg,#ff5468,#d93a4a);color:#fff;border:0}button:disabled{opacity:.4;cursor:not-allowed}
+label{font-size:12.5px;color:var(--mu);display:flex;align-items:center;gap:8px;margin:6px 0}input[type=range]{accent-color:var(--ac);flex:1;max-width:170px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px}.kv>span:nth-child(odd){color:var(--mu)}
+.mono{font-family:ui-monospace,Consolas,Menlo,monospace;font-size:12px;word-break:break-all}
+.bar{height:8px;border-radius:9px;background:var(--bd);overflow:hidden;margin:8px 0 2px;display:none}.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--wn),var(--er))}
+.pop{animation:pop .4s}
+#log{height:230px;overflow:auto;background:var(--code);color:var(--ct);border-radius:12px;padding:10px;font:12px/1.55 ui-monospace,Consolas,monospace}
+#log div{animation:fd .3s both}.e{color:#ff8b95}.w{color:#f3c56f}.g{color:#5fe0ae}
+table{width:100%;border-collapse:collapse;font-size:13px}th,td{text-align:left;padding:8px 6px;border-bottom:1px solid var(--bd)}th{color:var(--mu);font-weight:600}tr:last-child td{border:0}
+.tag{padding:3px 9px;border-radius:99px;font-size:11px;font-weight:700}.t-ok{background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}.t-wn{background:color-mix(in srgb,var(--wn) 22%,transparent);color:var(--wn)}.t-pl{background:var(--bd);color:var(--mu)}
+.tabs{display:flex;gap:6px;margin-bottom:10px}.tabs button{padding:6px 12px;font-size:12px}.tabs button.on{background:var(--ac);color:#fff;border-color:var(--ac)}
+pre{margin:0;background:var(--code);color:var(--ct);padding:14px;border-radius:12px;overflow:auto;font-size:12px;line-height:1.55;max-height:340px}
+.scroll{overflow-x:auto}.chip{display:inline-flex;gap:6px;align-items:center;padding:4px 10px;border-radius:99px;font-size:12px;font-weight:600;border:1px solid var(--bd)}
+.chip.on{border-color:transparent;color:#fff}#iLed.on{background:var(--er)}#iBuz.on{background:var(--wn)}#iVib.on{background:var(--ac)}.chip.on{animation:blink .7s infinite}
+@keyframes fu{from{opacity:0;transform:translateY(14px)}}@keyframes fd{from{opacity:0;transform:translateY(-6px)}}@keyframes rot{to{transform:rotate(360deg)}}
+@keyframes pl{0%{opacity:.5;transform:scale(.6)}100%{opacity:0;transform:scale(1.15)}}@keyframes blink{50%{opacity:.35}}
+@keyframes glow{70%{box-shadow:0 0 0 10px transparent}100%{box-shadow:0 0 0 0 transparent}}@keyframes pop{40%{transform:scale(1.25);color:var(--ac)}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head>
+<body data-s="IDLE"><div class="wrap">
+<div class="top">
+ <div class="brand"><div class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M8 12h2l1.5-3 2 6 1.5-3h2"/></svg></div>
+ <h1>Embedded Firmware (Device)<small>SafeGuard-RV · RISC-V wearable · Basys 3 + MYOSA Mini IoT</small></h1></div>
+ <div class="row" style="margin:0">
+  <span class="pill"><span class="dot live"></span><span id="mode">SIMULATOR MODE</span></span>
+  <button id="bConn" title="Connect real device over USB serial">Connect device</button>
+  <button id="bTheme">Theme</button>
+ </div>
+</div>
+
+<div class="grid">
+ <div class="c s12" style="animation-delay:.05s"><div class="hero">
+  <div class="ring"><svg viewBox="0 0 170 170"><circle class="pulse" cx="85" cy="85" r="70" fill="none" stroke="var(--sc)" stroke-width="3"/>
+   <circle cx="85" cy="85" r="62" fill="none" stroke="var(--bd)" stroke-width="8"/>
+   <circle class="spin" cx="85" cy="85" r="62" fill="none" stroke="var(--sc)" stroke-width="8" stroke-linecap="round" stroke-dasharray="90 300"/></svg>
+   <div class="mid"><b id="stateTxt">IDLE</b><span id="stateSub">monitoring</span></div></div>
+  <div class="wave"><h2>Accelerometer magnitude (live)</h2><canvas id="cv"></canvas></div>
+ </div></div>
+
+ <div class="c s12" style="animation-delay:.1s"><h2>Emergency pipeline</h2><div class="pipe" id="pipe"></div>
+  <div class="bar" id="barWrap"><i id="bar"></i></div><div id="cdTxt" class="mono"></div></div>
+
+ <div class="c s5" style="animation-delay:.15s"><h2>Controls</h2>
+  <div class="row"><button class="p" id="bFall">Simulate fall</button><button class="d" id="bSos">SOS</button><button id="bCancel" disabled>Cancel alert</button></div>
+  <div class="row"><button id="bReplay">Replay last packet</button><button id="bForge">Forged packet</button></div>
+  <label>Impact peak <input type="range" id="g" min="1" max="6" step="0.1" value="3.4"><span id="gv" class="mono">3.4 g</span></label>
+  <label>Posture after impact <select id="ori"><option>Lying</option><option>Upright</option></select></label>
+  <label><input type="checkbox" id="gps"> GPS fix available</label>
+  <label><input type="checkbox" id="lose"> Drop ACK (test retry)</label>
+  <h2 style="margin-top:14px">Indicators</h2>
+  <div class="row"><span class="chip" id="iLed">LED</span><span class="chip" id="iBuz">Buzzer</span><span class="chip" id="iVib">Vibration</span></div></div>
+
+ <div class="c s7" style="animation-delay:.2s"><h2>Sensors and link</h2>
+  <div class="kv"><span>Accelerometer</span><span class="mono" id="vA">-</span><span>Gyroscope</span><span class="mono" id="vG">-</span>
+  <span>Tilt from vertical</span><span class="mono" id="vT">-</span><span>GPS</span><span class="mono" id="vGps">-</span>
+  <span>BMP180 (optional)</span><span class="mono" id="vBmp">-</span><span>Wireless link</span><span class="mono" id="vRssi">-</span></div>
+  <h2 style="margin-top:16px">Security</h2>
+  <div class="kv"><span>Cipher / MAC</span><span>AES-128 · AES-CMAC</span><span>TX sequence</span><span class="mono" id="seq">0</span>
+  <span>Last packet</span><span class="mono" id="pkt">-</span><span>Retries</span><span id="retry">0 / 3</span>
+  <span>Receiver verdict</span><span id="verdict">-</span><span>Counters</span><span id="cnt"></span></div></div>
+
+ <div class="c s6" style="animation-delay:.25s"><h2>Receiver-side validation</h2>
+  <div class="kv"><span>1. CMAC verify</span><span id="rv1">-</span><span>2. SEQ newer than last</span><span id="rv2">-</span>
+  <span>3. Decrypt payload</span><span id="rv3">-</span><span>4. Authenticated ACK sent</span><span id="rv4">-</span><span>Last accepted SEQ</span><span class="mono" id="rv5">0</span></div>
+  <h2 style="margin-top:16px">Packet format (proposed)</h2>
+  <pre style="max-height:none">| DEV_ID 2B | SEQ 4B | TYPE 1B | PAYLOAD 8B (AES) | CMAC 8B |
+TYPE 0x01 FALL · 0x02 SOS     ACK: | DEV_ID | SEQ | CMAC |</pre></div>
+
+ <div class="c s6" style="animation-delay:.3s"><h2>Event log (UART)</h2><div id="log"></div></div>
+
+ <div class="c s6" style="animation-delay:.35s"><h2>Build status</h2><div class="scroll"><table>
+  <tr><th>Module</th><th>Status</th></tr>
+  <tr><td>RISC-V processor</td><td><span class="tag t-ok">Developed</span></td></tr>
+  <tr><td>AES-128 enc / dec, AES-CMAC</td><td><span class="tag t-ok">Simulation passed</span></td></tr>
+  <tr><td>Cancel, replay protection, ACK</td><td><span class="tag t-ok">Simulation passed</span></td></tr>
+  <tr><td>Sender / receiver logic</td><td><span class="tag t-ok">Tests passed</span></td></tr>
+  <tr><td>Basys 3 top-level</td><td><span class="tag t-ok">Simulation passed</span></td></tr>
+  <tr><td>FPGA synthesis</td><td><span class="tag t-wn">Next</span></td></tr>
+  <tr><td>Implementation + bitstream</td><td><span class="tag t-pl">Pending</span></td></tr>
+  <tr><td>Board test</td><td><span class="tag t-pl">Pending</span></td></tr>
+  <tr><td>Motion sensors, wireless module</td><td><span class="tag t-pl">Offline phase</span></td></tr>
+  <tr><td>Dashboard link to hardware</td><td><span class="tag t-pl">Planned</span></td></tr></table></div></div>
+
+ <div class="c s12" style="animation-delay:.4s"><h2>Source</h2>
+  <div class="tabs"><button class="on" data-t="0">Firmware (C, RISC-V)</button><button data-t="1">Sensor HAL (plug in later)</button><button data-t="2">Serial protocol</button></div>
+<pre id="src0">enum { IDLE, FALL_DETECTED, BUILD, SEND, WAIT_ACK, DONE, FAILED };
+#define G_THRESH 2.5f
+#define CANCEL_MS 8000
+#define ACK_TO_MS 3000
+#define MAX_RETRY 3
+
+void main(void){
+  hw_init(); sensors_init(); state = IDLE;
+  for(;;){
+    switch(state){
+    case IDLE:
+      if(sos_pressed()) { type=SOS; state=BUILD; }
+      else if(fall_detect()) { type=FALL; t0=millis(); alert_on(); state=FALL_DETECTED; }
+      break;
+    case FALL_DETECTED:
+      if(cancel_pressed()) { alert_off(); state=IDLE; }
+      else if(millis()-t0 > CANCEL_MS) state=BUILD;
+      break;
+    case BUILD:
+      seq++; pkt = make_packet(type, seq, gps_or_zero());
+      aes128_encrypt(key_enc, pkt.payload);
+      aes_cmac(key_mac, &pkt, pkt.tag);
+      retry=0; state=SEND; break;
+    case SEND: radio_tx(&pkt); t1=millis(); state=WAIT_ACK; break;
+    case WAIT_ACK:
+      if(radio_rx(&ack) && ack.seq==seq && cmac_ok(&ack)) state=DONE;
+      else if(millis()-t1 > ACK_TO_MS) state = (++retry < MAX_RETRY) ? SEND : FAILED;
+      break;
+    case DONE: case FAILED: alert_off(); state=IDLE; break;
+    }
+  }
+}</pre>
+<pre id="src1" hidden>/* sensor_hal.h  -- ONLY these functions change when real sensors arrive */
+typedef struct { float ax,ay,az, gx,gy,gz; } imu_t;
+int   imu_init(void);              /* I2C init of accelerometer + gyroscope   */
+int   imu_read(imu_t *o);          /* returns 0 on success, values in g, deg/s */
+int   gps_read(float *lat,float *lon);  /* 0 = fix, else no fix (optional)     */
+int   bmp_read(float *tC,float *hPa);   /* BMP180, optional / future           */
+int   radio_tx(const pkt_t *p);    /* wireless module                         */
+int   radio_rx(ack_t *a);          /* non-blocking                            */
+
+/* fall_detect(): same logic the page runs
+   1. |a| &gt; 2.5 g  -> impact timestamp
+   2. 0.9 s..1.8 s later: stddev(|a|, last 0.5 s) &lt; 0.08 g  (stillness)
+   3. tilt = acos(|az|/|a|) &gt; 55 deg                         (lying)
+   all true -> FALL_DETECTED (cancel window starts)               */</pre>
+<pre id="src2" hidden>Device -> PC over UART 115200 baud, one line per sample at ~50 Hz:
+  ax,ay,az,gx,gy,gz\n        (g and deg/s, plain decimal numbers)
+Optional events:  BTN:SOS\n   BTN:CANCEL\n
+
+Click "Connect device" on this page (Chrome / Edge, Web Serial).
+The simulator stops and the same detector + pipeline run on real data.</pre></div>
+</div></div>
+
+<script>
+(function(){
+"use strict";
+var $=function(i){return document.getElementById(i)};
+var TH=2.5,CANCEL_MS=8000,ACK_MS=1800,MAX=3;
+var STEPS=[["IDLE","Monitor"],["FALL_DETECTED","Cancel window"],["BUILD","AES + CMAC"],["SEND","Transmit"],["WAIT_ACK","Await ACK"],["DONE","Delivered"]];
+var SUB={IDLE:"monitoring",FALL_DETECTED:"cancel window",BUILD:"securing packet",SEND:"transmitting",WAIT_ACK:"waiting for ACK",DONE:"delivered",FAILED:"delivery failed"};
+var state="IDLE",seq=0,retry=0,last=null,type="FALL",rxLast=0,tmr=null,tick=null,hw=false;
+var c={sent:0,acked:0,can:0,rej:0,fail:0};
+var pipe=$("pipe");
+STEPS.forEach(function(s,i){if(i){var l=document.createElement("div");l.className="ln";l.id="ln"+i;pipe.appendChild(l)}
+ var d=document.createElement("div");d.className="nd";d.id="nd_"+s[0];d.innerHTML="<i>"+(i+1)+"</i><small>"+s[1]+"</small>";pipe.appendChild(d)});
+
+function log(m,k){var l=$("log"),d=document.createElement("div");if(k)d.className=k;d.textContent="["+new Date().toLocaleTimeString()+"] "+m;l.appendChild(d);l.scrollTop=l.scrollHeight;while(l.children.length>150)l.removeChild(l.firstChild)}
+function hex(n){var s="";for(var i=0;i<n;i++)s+=("0"+Math.floor(Math.random()*256).toString(16)).slice(-2);return s.toUpperCase()}
+function cnt(){var e=$("cnt");e.textContent="sent "+c.sent+" · acked "+c.acked+" · cancelled "+c.can+" · rejected "+c.rej+" · failed "+c.fail;e.classList.remove("pop");void e.offsetWidth;e.classList.add("pop")}
+function ind(on){["iLed","iBuz","iVib"].forEach(function(i){$(i).classList.toggle("on",on)})}
+function setState(s,bad){state=s;document.body.dataset.s=s;$("stateTxt").textContent=s==="FALL_DETECTED"?"FALL":s.replace("_"," ");$("stateSub").textContent=SUB[s];
+ var idx=-1;STEPS.forEach(function(x,i){if(x[0]===s)idx=i});
+ STEPS.forEach(function(x,i){var e=$("nd_"+x[0]);e.className="nd"+(i<idx?" done":"")+(i===idx?(bad?" bad":" on"):"");if(i)$("ln"+i).classList.toggle("f",i<=idx)});
+ $("bCancel").disabled=s!=="FALL_DETECTED"}
+
+/* ---------- sensor layer: simulator now, real device later ---------- */
+var buf=[],impactT=0,cur={ax:0,ay:0,az:1,gx:0,gy:0,gz:0},sim={mode:"n",t0:0};
+function simSample(){var t=performance.now(),n=function(a){return(Math.random()-.5)*(a||.04)};
+ var s={ax:n(),ay:n(),az:1+n(),gx:n(3),gy:n(3),gz:n(3),t:t};
+ if(sim.mode==="i"){if(t-sim.t0<250){s.az=parseFloat($("g").value)*(.7+.3*Math.random());s.ax=n(2);s.gx=n(300)}else sim.mode="p"}
+ if(sim.mode==="p"){if($("ori").value==="Lying"){s.ax=1+n();s.az=.08+n()}
+  if(t-sim.t0>2600&&state==="IDLE")sim.mode="n"}
+ return s}
+setInterval(function(){if(!hw)feed(simSample())},20);
+
+function feed(s){cur=s;var m=Math.sqrt(s.ax*s.ax+s.ay*s.ay+s.az*s.az);buf.push({t:s.t,m:m});if(buf.length>400)buf.shift();
+ if(state!=="IDLE"){impactT=0;return}
+ if(!impactT&&m>TH){impactT=s.t;log("Impact "+m.toFixed(2)+" g","w")}
+ if(impactT){var dt=s.t-impactT;if(dt>1800)impactT=0;else if(dt>900){
+  var r=buf.filter(function(b){return s.t-b.t<500}).map(function(b){return b.m}),mean=r.reduce(function(a,b){return a+b},0)/r.length,
+  sd=Math.sqrt(r.reduce(function(a,b){return a+(b-mean)*(b-mean)},0)/r.length),tilt=Math.acos(Math.min(1,Math.abs(s.az)/m))*57.3;
+  if(sd<.08){impactT=0;if(tilt>55)startAlert("FALL");else log("Impact then upright (tilt "+tilt.toFixed(0)+" deg): normal movement, no alert")}}}}
+
+async function connectSerial(){
+ if(!navigator.serial){log("Web Serial not available. Use Chrome or Edge on a normal https/localhost page.","e");return}
+ try{var port=await navigator.serial.requestPort();await port.open({baudRate:115200});hw=true;$("mode").textContent="HARDWARE CONNECTED";log("Serial port open. Using real sensor data.","g");
+  var dec=new TextDecoderStream();port.readable.pipeTo(dec.writable);var rd=dec.readable.getReader(),b="";
+  for(;;){var x=await rd.read();if(x.done)break;b+=x.value;var i;while((i=b.indexOf("\n"))>=0){var l=b.slice(0,i).trim();b=b.slice(i+1);
+   var p=l.split(",").map(Number);if(p.length>=6&&p.every(isFinite))feed({ax:p[0],ay:p[1],az:p[2],gx:p[3],gy:p[4],gz:p[5],t:performance.now()});
+   else if(l==="BTN:SOS")startAlert("SOS");else if(l==="BTN:CANCEL")cancel()}}
+ }catch(e){hw=false;$("mode").textContent="SIMULATOR MODE";log("Serial: "+e.message,"e")}}
+
+/* ---------- firmware state machine ---------- */
+function startAlert(t){if(state!=="IDLE")return;type=t;ind(true);
+ if(t==="SOS"){log("SOS button pressed","w");build();return}
+ log("FALL detected: impact + stillness + lying posture","w");setState("FALL_DETECTED");
+ var t0=Date.now();$("barWrap").style.display="block";
+ tick=setInterval(function(){var e=Date.now()-t0;$("bar").style.width=Math.min(100,e/CANCEL_MS*100)+"%";$("cdTxt").textContent="Cancel window: "+Math.max(0,(CANCEL_MS-e)/1000).toFixed(1)+" s";
+  if(e>=CANCEL_MS){clearInterval(tick);endWin();build()}},100)}
+function endWin(){$("barWrap").style.display="none";$("cdTxt").textContent=""}
+function cancel(){if(state!=="FALL_DETECTED")return;clearInterval(tick);endWin();ind(false);c.can++;cnt();log("Cancelled by user. No packet sent.","g");setState("IDLE")}
+function build(){setState("BUILD");seq++;retry=0;var tag=hex(8),gps=$("gps").checked;
+ last={seq:seq,tag:tag};$("seq").textContent=seq;$("pkt").textContent="0001 "+("0000000"+seq).slice(-8)+" "+(type==="SOS"?"02":"01")+" "+hex(8)+" "+tag;
+ log("Packet SEQ="+seq+" "+type+(gps?" +GPS":" (no GPS)")+": payload AES-128, CMAC "+tag);setTimeout(send,700)}
+function send(){setState("SEND");c.sent++;cnt();log("TX SEQ="+seq+(retry?" (retry "+retry+")":""));
+ setTimeout(function(){setState("WAIT_ACK");rx(last,false);
+  if($("lose").checked){log("ACK lost on link","e");tmr=setTimeout(timeout,ACK_MS)}
+  else tmr=setTimeout(function(){c.acked++;cnt();log("Authenticated ACK received, SEQ="+seq,"g");$("retry").textContent=retry+" / "+MAX;fin()},800)},600)}
+function timeout(){log("ACK timeout","w");retry++;$("retry").textContent=retry+" / "+MAX;if(retry<MAX)send();else{c.fail++;cnt();log("Max retries. Delivery FAILED.","e");setState("FAILED",true);setTimeout(back,1600)}}
+function fin(){setState("DONE");setTimeout(back,1400)}
+function back(){ind(false);setState("IDLE")}
+
+function rv(a,b,c2,d){[a,b,c2,d].forEach(function(x,i){var e=$("rv"+(i+1));e.textContent=x===null?"-":x?"PASS":"FAIL";e.style.color=x?"var(--ok)":"var(--er)"});$("rv5").textContent=rxLast}
+function ver(t,ok){var v=$("verdict");v.textContent=t;v.style.color=ok?"var(--ok)":"var(--er)"}
+function rx(p,forged){
+ if(forged){rv(false,null,null,false);c.rej++;cnt();ver("REJECT: CMAC invalid",0);log("Receiver: CMAC mismatch, dropped","e");return}
+ if(p.seq>rxLast){rxLast=p.seq;rv(true,true,true,!$("lose").checked);ver("ACCEPT: SEQ "+p.seq,1);log("Receiver: CMAC ok, SEQ "+p.seq+" accepted","g")}
+ else{rv(true,false,null,false);c.rej++;cnt();ver("REJECT: duplicate / replay SEQ "+p.seq,0);log("Receiver: SEQ "+p.seq+" <= "+rxLast+", ignored","w")}}
+
+$("bFall").onclick=function(){if(state!=="IDLE"||hw)return;sim.mode="i";sim.t0=performance.now();log("Simulated impact injected into sensor stream")};
+$("bSos").onclick=function(){startAlert("SOS")};$("bCancel").onclick=cancel;
+$("bReplay").onclick=function(){if(!last){log("Nothing to replay yet","w");return}log("Attacker replays SEQ="+last.seq,"w");rx(last,false)};
+$("bForge").onclick=function(){log("Attacker sends forged packet","w");rx({seq:rxLast+1},true)};
+$("g").oninput=function(){$("gv").textContent=this.value+" g"};
+$("bConn").onclick=connectSerial;
+$("bTheme").onclick=function(){var r=document.documentElement,d=r.dataset.theme?r.dataset.theme==="dark":matchMedia("(prefers-color-scheme:dark)").matches;r.dataset.theme=d?"light":"dark"};
+document.querySelectorAll(".tabs button").forEach(function(b){b.onclick=function(){document.querySelectorAll(".tabs button").forEach(function(x){x.classList.toggle("on",x===b)});for(var i=0;i<3;i++)$("src"+i).hidden=String(i)!==b.dataset.t}});
+
+/* ---------- live readouts + waveform ---------- */
+setInterval(function(){var s=cur,m=Math.sqrt(s.ax*s.ax+s.ay*s.ay+s.az*s.az);
+ $("vA").textContent=s.ax.toFixed(2)+" "+s.ay.toFixed(2)+" "+s.az.toFixed(2)+" g";$("vG").textContent=Math.round(s.gx)+" "+Math.round(s.gy)+" "+Math.round(s.gz)+" deg/s";
+ $("vT").textContent=(Math.acos(Math.min(1,Math.abs(s.az)/(m||1)))*57.3).toFixed(0)+" deg";
+ if(!hw){$("vGps").textContent=$("gps").checked?"20.2961 N, 85.8245 E (sim)":"no fix / not connected";
+  $("vBmp").textContent=(28+Math.random()).toFixed(1)+" C, "+(1008+Math.random()*2).toFixed(1)+" hPa (sim)";$("vRssi").textContent="RSSI "+Math.round(-60-Math.random()*8)+" dBm (sim)"}},300);
+var cv=$("cv"),cx=cv.getContext("2d");
+function draw(){var w=cv.clientWidth,h=cv.clientHeight,d=window.devicePixelRatio||1;if(cv.width!==w*d){cv.width=w*d;cv.height=h*d}
+ cx.setTransform(d,0,0,d,0,0);cx.clearRect(0,0,w,h);var st=getComputedStyle(document.body),sc=st.getPropertyValue("--sc"),bd=st.getPropertyValue("--bd"),wn=st.getPropertyValue("--wn"),mx=5;
+ var y=function(v){return h-8-Math.min(v,mx)/mx*(h-16)};cx.strokeStyle=bd;cx.lineWidth=1;for(var i=0;i<5;i++){cx.beginPath();cx.moveTo(0,h*i/4);cx.lineTo(w,h*i/4);cx.stroke()}
+ cx.setLineDash([5,5]);cx.strokeStyle=wn;cx.beginPath();cx.moveTo(0,y(TH));cx.lineTo(w,y(TH));cx.stroke();cx.setLineDash([]);
+ cx.fillStyle=wn;cx.font="10px system-ui";cx.fillText("2.5 g threshold",6,y(TH)-4);
+ if(buf.length>1){var g=cx.createLinearGradient(0,0,0,h);g.addColorStop(0,sc);g.addColorStop(1,"transparent");cx.beginPath();
+  buf.forEach(function(b,i){var x=i/399*w;i?cx.lineTo(x,y(b.m)):cx.moveTo(x,y(b.m))});cx.strokeStyle=sc;cx.lineWidth=2;cx.stroke();
+  cx.lineTo(buf.length/400*w,h);cx.lineTo(0,h);cx.globalAlpha=.12;cx.fillStyle=sc;cx.fill();cx.globalAlpha=1}
+ requestAnimationFrame(draw)}
+draw();setState("IDLE");cnt();rv(null,null,null,null);
+log("Boot OK. RISC-V core (simulated). Sensor layer: simulator. Use Connect device when sensors are attached.","g");
+})();
+</script></body></html>
